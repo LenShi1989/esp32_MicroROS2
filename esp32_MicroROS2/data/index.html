@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>ESP32 OTA 控制台</title>
+  <title>AGV 車輛控制台</title>
   <style>
     * { box-sizing: border-box; }
     body {
@@ -21,6 +21,12 @@
       color: #fff;
       flex-shrink: 0;
       padding: 20px 0;
+      overflow: hidden;
+      white-space: nowrap;
+      transition: width 0.25s ease;
+    }
+    .sidebar.collapsed {
+      width: 0;
     }
     .sidebar h1 {
       font-size: 16px;
@@ -42,6 +48,46 @@
       background: #29303d;
       color: #fff;
       border-left-color: #2d6cdf;
+    }
+
+    /* ---- 主要區域 (頂欄 + 內容) ---- */
+    .main {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      min-width: 0;
+    }
+    .topbar {
+      display: flex;
+      align-items: center;
+      padding: 10px 16px;
+      background: #fff;
+      border-bottom: 1px solid #e5e7eb;
+      flex-shrink: 0;
+    }
+    .hamburger-btn {
+      width: 40px;
+      height: 40px;
+      border: none;
+      border-radius: 8px;
+      background: #1f2937;
+      color: #fff;
+      cursor: pointer;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 4px;
+      padding: 0;
+      margin: 0;
+    }
+    .hamburger-btn:hover { background: #29303d; }
+    .hamburger-btn span {
+      display: block;
+      width: 18px;
+      height: 2px;
+      background: #fff;
+      border-radius: 2px;
     }
 
     /* ---- 主要內容 ---- */
@@ -210,14 +256,21 @@
 </head>
 <body>
 
-  <div class="sidebar">
-    <h1>ESP32 控制台</h1>
+  <div class="sidebar" id="sidebar">
+    <h1>AGV 車輛控制台</h1>
     <div class="nav-item active" data-panel="wifiPanel">WiFi 連線設定</div>
     <div class="nav-item" data-panel="devicePanel">設備控制</div>
     <div class="nav-item" data-panel="otaPanel">OTA 韌體更新</div>
   </div>
 
-  <div class="content">
+  <div class="main">
+    <div class="topbar">
+      <button type="button" class="hamburger-btn" id="sidebarToggle" aria-label="展開/收合側邊欄">
+        <span></span><span></span><span></span>
+      </button>
+    </div>
+
+    <div class="content">
 
     <!-- ================= WiFi 連線設定 ================= -->
     <div class="panel active" id="wifiPanel">
@@ -259,7 +312,7 @@
         <h2>設備控制</h2>
 
         <div class="switch-row">
-          <span class="gpio-state-text">GPIO2 輸出</span>
+          <span class="gpio-state-text">板載LED燈</span>
           <label class="switch">
             <input type="checkbox" id="gpio2Switch">
             <span class="switch-slider"></span>
@@ -312,9 +365,15 @@
       </div>
     </div>
 
+    </div>
   </div>
 
   <script>
+    // ---------- 漢堡選單: 展開/收合側邊欄 ----------
+    document.getElementById('sidebarToggle').addEventListener('click', function () {
+      document.getElementById('sidebar').classList.toggle('collapsed');
+    });
+
     // ---------- 側邊欄切換 ----------
     document.querySelectorAll('.nav-item').forEach(function (item) {
       item.addEventListener('click', function () {
