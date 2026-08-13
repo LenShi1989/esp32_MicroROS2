@@ -177,6 +177,35 @@
       transform: translateX(24px);
     }
     .gpio-state-text { font-size: 14px; color: #374151; }
+
+    /* ---- AGV 方向控制 ---- */
+    .dpad {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 8px;
+      margin-top: 16px;
+      user-select: none;
+    }
+    .dpad-row {
+      display: flex;
+      gap: 8px;
+    }
+    .dpad-btn {
+      background: #2d6cdf;
+      color: #fff;
+      border: none;
+      width: 76px;
+      height: 52px;
+      border-radius: 8px;
+      font-size: 14px;
+      cursor: pointer;
+      margin-top: 0;
+      touch-action: none;
+    }
+    .dpad-btn:active { background: #1f56b8; }
+    .dpad-btn.dpad-stop { background: #b91c1c; }
+    .dpad-btn.dpad-stop:active { background: #8f1717; }
   </style>
 </head>
 <body>
@@ -237,6 +266,23 @@
           </label>
         </div>
         <p class="gpio-state-text" id="gpio2StateText" style="margin-top:12px;">目前狀態: 讀取中...</p>
+      </div>
+
+      <div class="card" style="margin-top:24px;">
+        <h2>AGV 車輛控制</h2>
+        <p class="gpio-state-text" id="motorStateText">目前動作: 讀取中...</p>
+        <div class="dpad">
+          <button type="button" class="dpad-btn dpad-up" data-action="forward">前進</button>
+          <div class="dpad-row">
+            <button type="button" class="dpad-btn dpad-left" data-action="left">左轉</button>
+            <button type="button" class="dpad-btn dpad-stop" data-action="stop">停止</button>
+            <button type="button" class="dpad-btn dpad-right" data-action="right">右轉</button>
+          </div>
+          <button type="button" class="dpad-btn dpad-down" data-action="backward">後退</button>
+        </div>
+        <p style="font-size:12px;color:#9ca3af;margin-top:12px;">
+          按住方向按鈕移動，放開自動停止；左右轉為原地旋轉 (左右輪反方向)
+        </p>
       </div>
     </div>
 
@@ -408,6 +454,49 @@
           gpio2StateText.innerText = '設定失敗, 請重試';
           gpio2Switch.checked = !gpio2Switch.checked;
         });
+    });
+
+    // ---------- AGV 車輛控制 ----------
+    var motorStateText = document.getElementById('motorStateText');
+    var motorActionNames = { forward: '前進', backward: '後退', left: '左轉', right: '右轉', stop: '停止' };
+
+    function loadMotorStatus() {
+      fetch('/motor/status').then(function (r) { return r.json(); }).then(function (data) {
+        motorStateText.innerText = '目前動作: ' + (motorActionNames[data.action] || data.action);
+      }).catch(function () {
+        motorStateText.innerText = '無法取得馬達狀態';
+      });
+    }
+    loadMotorStatus();
+
+    function sendMotorAction(action) {
+      var formData = new URLSearchParams();
+      formData.append('action', action);
+
+      fetch('/motor/set', { method: 'POST', body: formData })
+        .then(function (r) { return r.json(); })
+        .then(function (data) {
+          motorStateText.innerText = '目前動作: ' + (motorActionNames[data.action] || data.action);
+        })
+        .catch(function () {
+          motorStateText.innerText = '控制指令傳送失敗';
+        });
+    }
+
+    document.querySelectorAll('.dpad-btn').forEach(function (btn) {
+      var action = btn.dataset.action;
+
+      if (action === 'stop') {
+        btn.addEventListener('click', function () { sendMotorAction('stop'); });
+        return;
+      }
+
+      // 按住方向按鈕才移動，放開 (或滑出/觸控取消) 立即停止，避免斷線時車輛持續移動
+      btn.addEventListener('mousedown', function () { sendMotorAction(action); });
+      btn.addEventListener('touchstart', function (e) { e.preventDefault(); sendMotorAction(action); });
+      ['mouseup', 'mouseleave', 'touchend', 'touchcancel'].forEach(function (evt) {
+        btn.addEventListener(evt, function () { sendMotorAction('stop'); });
+      });
     });
 
     // ---------- OTA 上傳 ----------

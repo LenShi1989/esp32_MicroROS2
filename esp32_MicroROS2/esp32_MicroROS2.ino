@@ -7,7 +7,8 @@
     - 若先前已儲存過 WiFi 帳密 (存於 NVS), 會自動嘗試以 STA 模式連線
     - 使用 SPIFFS 存放網頁 (data/index.html), 提供含側邊欄的瀏覽器 GUI
       - WiFi 連線設定: 掃描附近 SSID 或手動輸入, 輸入密碼後連線並儲存
-      - 設備控制: 開關切換控制 GPIO2 (ON/OFF)
+      - 設備控制: 開關切換控制 GPIO2 (ON/OFF); D-pad 按住方向按鈕控制 L298N 馬達前進/後退/左轉/右轉,
+        放開按鈕自動停止
       - OTA 燒錄: 可選擇更新「韌體 (Firmware)」或「檔案系統 (SPIFFS)」, 上傳 .bin 檔後
         由 Update 函式庫寫入對應分割區, 完成後自動重開機
     - 內建 DNS 導引式門戶 (Captive Portal): 手機/電腦連上 AP 熱點後,
@@ -21,7 +22,7 @@
        開啟設定頁面; 若未自動跳出, 手動開啟瀏覽器輸入 192.168.4.1
     4. 於「WiFi 連線設定」頁面掃描或手動輸入 SSID, 輸入密碼後按下連線
        連線成功後帳密會存入裝置, 下次開機自動連線
-    5. 於「設備控制」頁面用開關切換 GPIO2 輸出 ON/OFF
+    5. 於「設備控制」頁面用開關切換 GPIO2 輸出 ON/OFF, 並可按住 D-pad 方向按鈕控制 AGV 馬達移動
     6. 切換到「OTA 燒錄」頁面, 選擇更新類型 (韌體 / SPIFFS 檔案系統),
        選擇對應的 .bin 檔上傳, 完成後裝置自動重開機並執行新韌體或載入新檔案系統
 */
@@ -43,6 +44,13 @@ const unsigned long WIFI_CONNECT_TIMEOUT_MS = 15000;
 // 受控制的 GPIO 腳位
 const int GPIO_CONTROL_PIN = 2;
 
+// ==== L298N 馬達方向控制腳位 ====
+// 馬達 A (左輪): IN1/IN2, 馬達 B (右輪): IN3/IN4
+const int MOTOR_A_IN1 = 26;
+const int MOTOR_A_IN2 = 25;
+const int MOTOR_B_IN3 = 33;
+const int MOTOR_B_IN4 = 32;
+
 const byte DNS_PORT = 53;
 DNSServer dnsServer;
 
@@ -50,6 +58,9 @@ WebServer server(80);
 Preferences preferences;
 
 bool gpioState = false;
+
+// 目前馬達動作: stop / forward / backward / left / right
+String motorAction = "stop";
 
 // 韌體更新結果, 用於上傳完成後回傳網頁訊息
 bool updateSuccess = false;
@@ -92,6 +103,43 @@ void loadAndConnectSavedWiFi() {
   } else {
     Serial.println("尚未儲存過 WiFi 帳密");
   }
+}
+
+// ---------- 馬達控制 ----------
+
+// 設定單一馬達方向: dir 1=正轉(前), -1=反轉(後), 0=停止
+void setMotor(int in1, int in2, int dir) {
+  if (dir > 0) {
+    digitalWrite(in1, HIGH);
+    digitalWrite(in2, LOW);
+  } else if (dir < 0) {
+    digitalWrite(in1, LOW);
+    digitalWrite(in2, HIGH);
+  } else {
+    digitalWrite(in1, LOW);
+    digitalWrite(in2, LOW);
+  }
+}
+
+// 依動作名稱控制左右輪 (前進/後退左右輪同方向, 左右轉左右輪反方向原地旋轉)
+void applyMotorAction(const String &action) {
+  if (action == "forward") {
+    setMotor(MOTOR_A_IN1, MOTOR_A_IN2, 1);
+    setMotor(MOTOR_B_IN3, MOTOR_B_IN4, 1);
+  } else if (action == "backward") {
+    setMotor(MOTOR_A_IN1, MOTOR_A_IN2, -1);
+    setMotor(MOTOR_B_IN3, MOTOR_B_IN4, -1);
+  } else if (action == "left") {
+    setMotor(MOTOR_A_IN1, MOTOR_A_IN2, -1);
+    setMotor(MOTOR_B_IN3, MOTOR_B_IN4, 1);
+  } else if (action == "right") {
+    setMotor(MOTOR_A_IN1, MOTOR_A_IN2, 1);
+    setMotor(MOTOR_B_IN3, MOTOR_B_IN4, -1);
+  } else {
+    setMotor(MOTOR_A_IN1, MOTOR_A_IN2, 0);
+    setMotor(MOTOR_B_IN3, MOTOR_B_IN4, 0);
+  }
+  motorAction = action;
 }
 
 // ---------- 網頁路由 ----------
@@ -176,6 +224,24 @@ void handleGpioSet() {
   server.send(200, "application/json", json);
 }
 
+// GET /motor/status : 回傳目前馬達動作 JSON
+void handleMotorStatus() {
+  String json = "{\"action\":\"" + motorAction + "\"}";
+  server.send(200, "application/json", json);
+}
+
+// POST /motor/set : 依表單傳入的 action (forward/backward/left/right/stop) 控制馬達
+void handleMotorSet() {
+  String action = server.arg("action");
+  if (action != "forward" && action != "backward" && action != "left" && action != "right") {
+    action = "stop";
+  }
+  applyMotorAction(action);
+
+  String json = "{\"success\":true,\"action\":\"" + motorAction + "\"}";
+  server.send(200, "application/json", json);
+}
+
 // 導引式門戶: 未定義的路徑一律導回設定頁, 讓作業系統的連線偵測機制自動彈出瀏覽器
 void handleCaptivePortal() {
   server.sendHeader("Location", "http://" + WiFi.softAPIP().toString() + "/", true);
@@ -254,6 +320,12 @@ void setup() {
   pinMode(GPIO_CONTROL_PIN, OUTPUT);
   digitalWrite(GPIO_CONTROL_PIN, LOW);
 
+  pinMode(MOTOR_A_IN1, OUTPUT);
+  pinMode(MOTOR_A_IN2, OUTPUT);
+  pinMode(MOTOR_B_IN3, OUTPUT);
+  pinMode(MOTOR_B_IN4, OUTPUT);
+  applyMotorAction("stop");
+
   if (!SPIFFS.begin(true)) {
     Serial.println("SPIFFS 掛載失敗");
   }
@@ -277,6 +349,8 @@ void setup() {
   server.on("/connect", HTTP_POST, handleConnect);
   server.on("/gpio/status", HTTP_GET, handleGpioStatus);
   server.on("/gpio/set", HTTP_POST, handleGpioSet);
+  server.on("/motor/status", HTTP_GET, handleMotorStatus);
+  server.on("/motor/set", HTTP_POST, handleMotorSet);
 
   // /update 路由: 上傳完成回傳結果 JSON, 上傳過程呼叫 handleUpdateUpload
   server.on(
