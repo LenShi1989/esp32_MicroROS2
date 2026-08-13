@@ -252,6 +252,13 @@
     .dpad-btn:active { background: #1f56b8; }
     .dpad-btn.dpad-stop { background: #b91c1c; }
     .dpad-btn.dpad-stop:active { background: #8f1717; }
+
+    /* ---- 速度調棒 ---- */
+    .speed-slider {
+      width: 100%;
+      margin-top: 4px;
+      accent-color: #2d6cdf;
+    }
   </style>
 </head>
 <body>
@@ -324,6 +331,9 @@
       <div class="card" style="margin-top:24px;">
         <h2>AGV 車輛控制</h2>
         <p class="gpio-state-text" id="motorStateText">目前動作: 讀取中...</p>
+
+        <label for="speedSlider">速度: <span id="speedValue">--</span>%</label>
+        <input type="range" id="speedSlider" class="speed-slider" min="0" max="100" step="5" value="100">
         <div class="dpad">
           <button type="button" class="dpad-btn dpad-up" data-action="forward">前進</button>
           <div class="dpad-row">
@@ -519,14 +529,34 @@
     var motorStateText = document.getElementById('motorStateText');
     var motorActionNames = { forward: '前進', backward: '後退', left: '左轉', right: '右轉', stop: '停止' };
 
+    var speedSlider = document.getElementById('speedSlider');
+    var speedValue = document.getElementById('speedValue');
+
     function loadMotorStatus() {
       fetch('/motor/status').then(function (r) { return r.json(); }).then(function (data) {
         motorStateText.innerText = '目前動作: ' + (motorActionNames[data.action] || data.action);
+        speedSlider.value = data.speed;
+        speedValue.innerText = data.speed;
       }).catch(function () {
         motorStateText.innerText = '無法取得馬達狀態';
       });
     }
     loadMotorStatus();
+
+    speedSlider.addEventListener('input', function () {
+      speedValue.innerText = speedSlider.value;
+    });
+
+    // 放開滑桿才送出, 避免拖曳過程產生大量請求
+    speedSlider.addEventListener('change', function () {
+      var formData = new URLSearchParams();
+      formData.append('speed', speedSlider.value);
+
+      fetch('/motor/speed', { method: 'POST', body: formData })
+        .then(function (r) { return r.json(); })
+        .then(function (data) { speedValue.innerText = data.speed; })
+        .catch(function () { motorStateText.innerText = '速度設定失敗'; });
+    });
 
     function sendMotorAction(action) {
       var formData = new URLSearchParams();

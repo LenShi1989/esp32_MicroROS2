@@ -8,7 +8,7 @@
     - 使用 SPIFFS 存放網頁 (data/index.html), 提供含側邊欄的瀏覽器 GUI
       - WiFi 連線設定: 掃描附近 SSID 或手動輸入, 輸入密碼後連線並儲存
       - 設備控制: 開關切換控制 GPIO2 (ON/OFF); D-pad 按住方向按鈕控制 L298N 馬達前進/後退/左轉/右轉,
-        放開按鈕自動停止
+        放開按鈕自動停止; 速度調棒以 ENA/ENB 的 PWM duty 調整轉速 (0-100%)
       - OTA 燒錄: 可選擇更新「韌體 (Firmware)」或「檔案系統 (SPIFFS)」, 上傳 .bin 檔後
         由 Update 函式庫寫入對應分割區, 完成後自動重開機
     - 內建 DNS 導引式門戶 (Captive Portal): 手機/電腦連上 AP 熱點後,
@@ -22,7 +22,8 @@
        開啟設定頁面; 若未自動跳出, 手動開啟瀏覽器輸入 192.168.4.1
     4. 於「WiFi 連線設定」頁面掃描或手動輸入 SSID, 輸入密碼後按下連線
        連線成功後帳密會存入裝置, 下次開機自動連線
-    5. 於「設備控制」頁面用開關切換 GPIO2 輸出 ON/OFF, 並可按住 D-pad 方向按鈕控制 AGV 馬達移動
+    5. 於「設備控制」頁面用開關切換 GPIO2 輸出 ON/OFF, 按住 D-pad 方向按鈕控制 AGV 馬達移動,
+       並可拖曳速度調棒調整轉速
     6. 切換到「OTA 燒錄」頁面, 選擇更新類型 (韌體 / SPIFFS 檔案系統),
        選擇對應的 .bin 檔上傳, 完成後裝置自動重開機並執行新韌體或載入新檔案系統
 */
@@ -46,10 +47,17 @@ const int GPIO_CONTROL_PIN = 2;
 
 // ==== L298N 馬達方向控制腳位 ====
 // 馬達 A (左輪): IN1/IN2, 馬達 B (右輪): IN3/IN4
-const int MOTOR_A_IN1 = 26;
-const int MOTOR_A_IN2 = 25;
-const int MOTOR_B_IN3 = 33;
-const int MOTOR_B_IN4 = 32;
+const int MOTOR_A_IN1 = 27;
+const int MOTOR_A_IN2 = 26;
+const int MOTOR_B_IN3 = 25;
+const int MOTOR_B_IN4 = 33;
+
+// ==== L298N 馬達 PWM 調速腳位 (ENA/ENB) ====
+const int MOTOR_A_ENA = 14;
+const int MOTOR_B_ENB = 32;
+
+const int PWM_FREQ_HZ = 5000;
+const int PWM_RESOLUTION_BITS = 8;  // duty 0-255
 
 const byte DNS_PORT = 53;
 DNSServer dnsServer;
@@ -61,6 +69,9 @@ bool gpioState = false;
 
 // 目前馬達動作: stop / forward / backward / left / right
 String motorAction = "stop";
+
+// 馬達速度百分比 (0-100), 透過 ENA/ENB 的 PWM duty 控制
+int motorSpeed = 100;
 
 // 韌體更新結果, 用於上傳完成後回傳網頁訊息
 bool updateSuccess = false;
@@ -121,6 +132,13 @@ void setMotor(int in1, int in2, int dir) {
   }
 }
 
+// 依目前動作與速度更新 ENA/ENB 的 PWM duty (停止時輸出 0 使馬達不轉)
+void applyMotorSpeed() {
+  int duty = (motorAction == "stop") ? 0 : map(motorSpeed, 0, 100, 0, 255);
+  ledcWrite(MOTOR_A_ENA, duty);
+  ledcWrite(MOTOR_B_ENB, duty);
+}
+
 // 依動作名稱控制左右輪 (前進/後退左右輪同方向, 左右轉左右輪反方向原地旋轉)
 void applyMotorAction(const String &action) {
   if (action == "forward") {
@@ -140,6 +158,7 @@ void applyMotorAction(const String &action) {
     setMotor(MOTOR_B_IN3, MOTOR_B_IN4, 0);
   }
   motorAction = action;
+  applyMotorSpeed();
 }
 
 // ---------- 網頁路由 ----------
@@ -224,9 +243,9 @@ void handleGpioSet() {
   server.send(200, "application/json", json);
 }
 
-// GET /motor/status : 回傳目前馬達動作 JSON
+// GET /motor/status : 回傳目前馬達動作與速度 JSON
 void handleMotorStatus() {
-  String json = "{\"action\":\"" + motorAction + "\"}";
+  String json = "{\"action\":\"" + motorAction + "\",\"speed\":" + String(motorSpeed) + "}";
   server.send(200, "application/json", json);
 }
 
@@ -238,7 +257,17 @@ void handleMotorSet() {
   }
   applyMotorAction(action);
 
-  String json = "{\"success\":true,\"action\":\"" + motorAction + "\"}";
+  String json = "{\"success\":true,\"action\":\"" + motorAction + "\",\"speed\":" + String(motorSpeed) + "}";
+  server.send(200, "application/json", json);
+}
+
+// POST /motor/speed : 依表單傳入的 speed (0-100) 調整馬達轉速
+void handleMotorSpeed() {
+  int speed = server.arg("speed").toInt();
+  motorSpeed = constrain(speed, 0, 100);
+  applyMotorSpeed();
+
+  String json = "{\"success\":true,\"speed\":" + String(motorSpeed) + "}";
   server.send(200, "application/json", json);
 }
 
@@ -324,6 +353,11 @@ void setup() {
   pinMode(MOTOR_A_IN2, OUTPUT);
   pinMode(MOTOR_B_IN3, OUTPUT);
   pinMode(MOTOR_B_IN4, OUTPUT);
+
+  // ENA/ENB 以 LEDC PWM 輸出控制轉速 (ESP32 Core 3.x API, channel 由底層自動配置)
+  ledcAttach(MOTOR_A_ENA, PWM_FREQ_HZ, PWM_RESOLUTION_BITS);
+  ledcAttach(MOTOR_B_ENB, PWM_FREQ_HZ, PWM_RESOLUTION_BITS);
+
   applyMotorAction("stop");
 
   if (!SPIFFS.begin(true)) {
@@ -351,6 +385,7 @@ void setup() {
   server.on("/gpio/set", HTTP_POST, handleGpioSet);
   server.on("/motor/status", HTTP_GET, handleMotorStatus);
   server.on("/motor/set", HTTP_POST, handleMotorSet);
+  server.on("/motor/speed", HTTP_POST, handleMotorSpeed);
 
   // /update 路由: 上傳完成回傳結果 JSON, 上傳過程呼叫 handleUpdateUpload
   server.on(

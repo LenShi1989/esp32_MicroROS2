@@ -27,7 +27,9 @@
 
 | ESP32   | L298N |
 | ------- | ----- |
-| GPIO_26 | INT1  |
-| GPIO_25 | INT2  |
-| GPIO_33 | INT3  |
-| GPIO_32 | INT4  |
+| GPIO_32 | ENB   |
+| GPIO_27 | INT1  |
+| GPIO_26 | INT2  |
+| GPIO_25 | INT3  |
+| GPIO_33 | INT4  |
+| GPIO_14 | ENA   |
