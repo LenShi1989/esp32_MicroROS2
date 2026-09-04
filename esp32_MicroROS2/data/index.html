@@ -259,6 +259,23 @@
       margin-top: 4px;
       accent-color: #2d6cdf;
     }
+
+    /* ---- 影像串流 ---- */
+    .stream-box {
+      margin-top: 16px;
+      background: #111827;
+      border-radius: 8px;
+      min-height: 220px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+    }
+    .stream-box .gpio-state-text { color: #9ca3af; }
+    .stream-box img {
+      width: 100%;
+      display: block;
+    }
   </style>
 </head>
 <body>
@@ -346,6 +363,23 @@
         <p style="font-size:12px;color:#9ca3af;margin-top:12px;">
           按住方向按鈕移動，放開自動停止；左右轉為原地旋轉 (左右輪反方向)
         </p>
+      </div>
+
+      <div class="card" style="margin-top:24px;">
+        <h2>影像串流</h2>
+
+        <label for="streamUrl">串流網址</label>
+        <input type="text" id="streamUrl" placeholder="例如: http://192.168.4.2:81/stream">
+
+        <div class="radio-row" style="margin-top:0;">
+          <button type="button" id="streamStartBtn">開始串流</button>
+          <button type="button" class="secondary" id="streamStopBtn">停止</button>
+        </div>
+
+        <div class="stream-box" id="streamBox">
+          <span class="gpio-state-text">尚未連接影像串流</span>
+        </div>
+        <div class="result-msg" id="streamResult"></div>
       </div>
     </div>
 
@@ -587,6 +621,54 @@
         btn.addEventListener(evt, function () { sendMotorAction('stop'); });
       });
     });
+
+    // ---------- 影像串流 ----------
+    var streamUrlInput = document.getElementById('streamUrl');
+    var streamBox = document.getElementById('streamBox');
+    var streamResult = document.getElementById('streamResult');
+
+    try {
+      var savedStreamUrl = localStorage.getItem('streamUrl');
+      if (savedStreamUrl) streamUrlInput.value = savedStreamUrl;
+    } catch (err) {}
+
+    function stopStream() {
+      streamBox.innerHTML = '<span class="gpio-state-text">尚未連接影像串流</span>';
+      streamResult.className = 'result-msg';
+      streamResult.innerText = '';
+    }
+
+    function startStream() {
+      var url = streamUrlInput.value.trim();
+      if (!url) {
+        streamResult.className = 'result-msg fail';
+        streamResult.innerText = '請先輸入串流網址';
+        return;
+      }
+
+      try { localStorage.setItem('streamUrl', url); } catch (err) {}
+
+      streamResult.className = 'result-msg';
+      streamResult.innerText = '連接中...';
+
+      var img = document.createElement('img');
+      img.alt = '影像串流';
+      img.onload = function () {
+        streamResult.className = 'result-msg ok';
+        streamResult.innerText = '串流已連接';
+      };
+      img.onerror = function () {
+        streamResult.className = 'result-msg fail';
+        streamResult.innerText = '無法載入串流, 請確認網址是否正確';
+      };
+      img.src = url;
+
+      streamBox.innerHTML = '';
+      streamBox.appendChild(img);
+    }
+
+    document.getElementById('streamStartBtn').addEventListener('click', startStream);
+    document.getElementById('streamStopBtn').addEventListener('click', stopStream);
 
     // ---------- OTA 上傳 ----------
     var otaForm = document.getElementById('uploadForm');
