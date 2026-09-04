@@ -332,8 +332,10 @@
         color: #9ca3af;
       }
       .stream-box img {
-        width: 100%;
+        max-width: 100%;
+        max-height: 100%;
         display: block;
+        transition: transform 0.2s ease;
       }
     </style>
   </head>
@@ -457,6 +459,9 @@
               <button type="button" id="streamStartBtn">開始串流</button>
               <button type="button" class="secondary" id="streamStopBtn">
                 停止
+              </button>
+              <button type="button" class="secondary" id="streamRotateBtn">
+                旋轉 90°
               </button>
             </div>
 
@@ -883,6 +888,7 @@
       var streamFps = parseInt(streamFpsSlider.value, 10);
       var streamTimer = null;
       var streamImg = null;
+      var streamRotation = 0;
 
       try {
         var savedStreamUrl = localStorage.getItem("streamUrl");
@@ -892,6 +898,14 @@
         if (savedStreamFps >= 1 && savedStreamFps <= 10) {
           streamFps = savedStreamFps;
           streamFpsSlider.value = streamFps;
+        }
+
+        var savedStreamRotation = parseInt(
+          localStorage.getItem("streamRotation"),
+          10,
+        );
+        if (savedStreamRotation % 90 === 0) {
+          streamRotation = ((savedStreamRotation % 360) + 360) % 360;
         }
       } catch (err) {}
       streamFpsValue.innerText = streamFps;
@@ -950,6 +964,7 @@
 
         streamImg = document.createElement("img");
         streamImg.alt = "影像串流";
+        streamImg.style.transform = "rotate(" + streamRotation + "deg)";
         streamImg.onload = function () {
           streamResult.className = "result-msg ok";
           streamResult.innerText = "串流中 (每秒 " + streamFps + " 張)";
@@ -967,6 +982,18 @@
           fetchSnapshot(url);
         }, Math.round(1000 / streamFps));
       }
+
+      document
+        .getElementById("streamRotateBtn")
+        .addEventListener("click", function () {
+          streamRotation = (streamRotation + 90) % 360;
+          try {
+            localStorage.setItem("streamRotation", streamRotation);
+          } catch (err) {}
+          if (streamImg) {
+            streamImg.style.transform = "rotate(" + streamRotation + "deg)";
+          }
+        });
 
       document
         .getElementById("streamStartBtn")
