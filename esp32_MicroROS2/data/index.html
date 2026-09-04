@@ -437,7 +437,7 @@
             <input
               type="text"
               id="streamUrl"
-              placeholder="例如: http://192.168.4.2:81/stream"
+              placeholder="例如: http://192.168.10.142/capture"
             />
 
             <div class="radio-row" style="margin-top: 0">
@@ -861,10 +861,13 @@
         );
       });
 
-      // ---------- 影像串流 ----------
+      // ---------- 影像串流 (每秒抓一張快照) ----------
       var streamUrlInput = document.getElementById("streamUrl");
       var streamBox = document.getElementById("streamBox");
       var streamResult = document.getElementById("streamResult");
+      var streamIntervalMs = 1000;
+      var streamTimer = null;
+      var streamImg = null;
 
       try {
         var savedStreamUrl = localStorage.getItem("streamUrl");
@@ -872,10 +875,22 @@
       } catch (err) {}
 
       function stopStream() {
+        if (streamTimer) {
+          clearInterval(streamTimer);
+          streamTimer = null;
+        }
+        streamImg = null;
         streamBox.innerHTML =
           '<span class="gpio-state-text">尚未連接影像串流</span>';
         streamResult.className = "result-msg";
         streamResult.innerText = "";
+      }
+
+      // 每次抓取都在網址後加上時間戳, 避免瀏覽器快取回傳同一張快照
+      function fetchSnapshot(baseUrl) {
+        if (!streamImg) return;
+        var sep = baseUrl.indexOf("?") === -1 ? "?" : "&";
+        streamImg.src = baseUrl + sep + "_t=" + Date.now();
       }
 
       function startStream() {
@@ -890,23 +905,29 @@
           localStorage.setItem("streamUrl", url);
         } catch (err) {}
 
+        if (streamTimer) clearInterval(streamTimer);
+
         streamResult.className = "result-msg";
         streamResult.innerText = "連接中...";
 
-        var img = document.createElement("img");
-        img.alt = "影像串流";
-        img.onload = function () {
+        streamImg = document.createElement("img");
+        streamImg.alt = "影像串流";
+        streamImg.onload = function () {
           streamResult.className = "result-msg ok";
-          streamResult.innerText = "串流已連接";
+          streamResult.innerText = "串流中 (每秒更新一張)";
         };
-        img.onerror = function () {
+        streamImg.onerror = function () {
           streamResult.className = "result-msg fail";
-          streamResult.innerText = "無法載入串流, 請確認網址是否正確";
+          streamResult.innerText = "無法載入影像, 請確認網址是否正確";
         };
-        img.src = url;
 
         streamBox.innerHTML = "";
-        streamBox.appendChild(img);
+        streamBox.appendChild(streamImg);
+
+        fetchSnapshot(url);
+        streamTimer = setInterval(function () {
+          fetchSnapshot(url);
+        }, streamIntervalMs);
       }
 
       document
