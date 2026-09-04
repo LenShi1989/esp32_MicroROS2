@@ -440,6 +440,19 @@
               placeholder="例如: http://192.168.10.142/capture"
             />
 
+            <label for="streamFpsSlider"
+              >每秒抓取張數: <span id="streamFpsValue">1</span> FPS</label
+            >
+            <input
+              type="range"
+              id="streamFpsSlider"
+              class="speed-slider"
+              min="1"
+              max="10"
+              step="1"
+              value="1"
+            />
+
             <div class="radio-row" style="margin-top: 0">
               <button type="button" id="streamStartBtn">開始串流</button>
               <button type="button" class="secondary" id="streamStopBtn">
@@ -861,18 +874,43 @@
         );
       });
 
-      // ---------- 影像串流 (每秒抓一張快照) ----------
+      // ---------- 影像串流 (可調整每秒抓取張數的快照輪詢) ----------
       var streamUrlInput = document.getElementById("streamUrl");
+      var streamFpsSlider = document.getElementById("streamFpsSlider");
+      var streamFpsValue = document.getElementById("streamFpsValue");
       var streamBox = document.getElementById("streamBox");
       var streamResult = document.getElementById("streamResult");
-      var streamIntervalMs = 1000;
+      var streamFps = parseInt(streamFpsSlider.value, 10);
       var streamTimer = null;
       var streamImg = null;
 
       try {
         var savedStreamUrl = localStorage.getItem("streamUrl");
         if (savedStreamUrl) streamUrlInput.value = savedStreamUrl;
+
+        var savedStreamFps = parseInt(localStorage.getItem("streamFps"), 10);
+        if (savedStreamFps >= 1 && savedStreamFps <= 10) {
+          streamFps = savedStreamFps;
+          streamFpsSlider.value = streamFps;
+        }
       } catch (err) {}
+      streamFpsValue.innerText = streamFps;
+
+      // 拖曳調整 FPS: 若正在串流中則同步以新頻率重新排程
+      streamFpsSlider.addEventListener("input", function () {
+        streamFps = parseInt(streamFpsSlider.value, 10);
+        streamFpsValue.innerText = streamFps;
+        try {
+          localStorage.setItem("streamFps", streamFps);
+        } catch (err) {}
+
+        if (streamTimer) {
+          clearInterval(streamTimer);
+          streamTimer = setInterval(function () {
+            fetchSnapshot(streamUrlInput.value.trim());
+          }, Math.round(1000 / streamFps));
+        }
+      });
 
       function stopStream() {
         if (streamTimer) {
@@ -914,7 +952,7 @@
         streamImg.alt = "影像串流";
         streamImg.onload = function () {
           streamResult.className = "result-msg ok";
-          streamResult.innerText = "串流中 (每秒更新一張)";
+          streamResult.innerText = "串流中 (每秒 " + streamFps + " 張)";
         };
         streamImg.onerror = function () {
           streamResult.className = "result-msg fail";
@@ -927,7 +965,7 @@
         fetchSnapshot(url);
         streamTimer = setInterval(function () {
           fetchSnapshot(url);
-        }, streamIntervalMs);
+        }, Math.round(1000 / streamFps));
       }
 
       document
