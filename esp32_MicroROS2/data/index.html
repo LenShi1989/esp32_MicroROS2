@@ -275,7 +275,7 @@
         color: #374151;
       }
 
-      /* ---- AGV 方向控制 ---- */
+      /* ---- AGV 方向控制: D-pad 按鍵 ---- */
       .dpad {
         display: flex;
         flex-direction: column;
@@ -308,6 +308,62 @@
       }
       .dpad-btn.dpad-stop:active {
         background: #8f1717;
+      }
+
+      /* ---- AGV 方向控制: 可拖曳虛擬搖桿 ---- */
+      .joystick-wrap {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        margin-top: 16px;
+        user-select: none;
+      }
+      .joystick-base {
+        position: relative;
+        width: 180px;
+        height: 180px;
+        border-radius: 50%;
+        background: radial-gradient(circle at 50% 42%, #2b3444, #1f2937 70%);
+        box-shadow:
+          inset 0 2px 12px rgba(0, 0, 0, 0.5),
+          0 2px 6px rgba(0, 0, 0, 0.15);
+        touch-action: none;
+      }
+      .joystick-base::before {
+        content: "";
+        position: absolute;
+        inset: 12px;
+        border-radius: 50%;
+        border: 1px dashed rgba(255, 255, 255, 0.15);
+      }
+      .joystick-knob {
+        position: absolute;
+        width: 72px;
+        height: 72px;
+        left: 50%;
+        top: 50%;
+        margin-left: -36px;
+        margin-top: -36px;
+        border-radius: 50%;
+        background: linear-gradient(145deg, #3b82f6, #2d6cdf);
+        box-shadow: 0 4px 10px rgba(0, 0, 0, 0.35);
+        transition: transform 0.15s ease;
+        touch-action: none;
+      }
+      .joystick-knob::after {
+        content: "✛";
+        position: absolute;
+        inset: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: rgba(255, 255, 255, 0.85);
+        font-size: 20px;
+      }
+      .joystick-knob.dragging {
+        transition: none;
+        background: linear-gradient(145deg, #60a5fa, #2d6cdf);
+        box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
       }
 
       /* ---- 速度調棒 ---- */
@@ -475,7 +531,7 @@
           </div>
 
           <div class="card" style="margin-top: 24px">
-            <h2>AGV 車輛控制</h2>
+            <h2>AGV 車輛控制-1</h2>
             <p class="gpio-state-text" id="motorStateText">
               目前動作: 讀取中...
             </p>
@@ -533,6 +589,23 @@
             </div>
             <p style="font-size: 12px; color: #9ca3af; margin-top: 12px">
               按住方向按鈕移動，放開自動停止；左右轉為原地旋轉 (左右輪反方向)
+            </p>
+          </div>
+
+          <div class="card" style="margin-top: 24px">
+            <h2>AGV 車輛控制-2</h2>
+            <p class="gpio-state-text" id="motorStateText2">
+              目前動作: 讀取中...
+            </p>
+
+            <div class="joystick-wrap">
+              <div class="joystick-base" id="joystickBase">
+                <div class="joystick-knob" id="joystickKnob"></div>
+              </div>
+            </div>
+            <p style="font-size: 12px; color: #9ca3af; margin-top: 12px">
+              拖曳搖桿控制方向，放開自動回正並停止；左右為原地旋轉 (左右輪反方向)；速度請於「AGV
+              車輛控制-1」卡片調整
             </p>
           </div>
         </div>
@@ -853,8 +926,9 @@
           });
       });
 
-      // ---------- AGV 車輛控制 ----------
+      // ---------- AGV 車輛控制 (D-pad 按鍵 + 可拖曳搖桿, 共用同一組馬達狀態) ----------
       var motorStateText = document.getElementById("motorStateText");
+      var motorStateText2 = document.getElementById("motorStateText2");
       var motorActionNames = {
         forward: "前進",
         backward: "後退",
@@ -862,6 +936,12 @@
         right: "右轉",
         stop: "停止",
       };
+
+      // 兩張卡片 (D-pad / 搖桿) 都要同步顯示目前動作
+      function setMotorStateText(text) {
+        motorStateText.innerText = text;
+        motorStateText2.innerText = text;
+      }
 
       var speedSlider = document.getElementById("speedSlider");
       var speedValue = document.getElementById("speedValue");
@@ -872,13 +952,14 @@
             return r.json();
           })
           .then(function (data) {
-            motorStateText.innerText =
-              "目前動作: " + (motorActionNames[data.action] || data.action);
+            setMotorStateText(
+              "目前動作: " + (motorActionNames[data.action] || data.action),
+            );
             speedSlider.value = data.speed;
             speedValue.innerText = data.speed;
           })
           .catch(function () {
-            motorStateText.innerText = "無法取得馬達狀態";
+            setMotorStateText("無法取得馬達狀態");
           });
       }
       loadMotorStatus();
@@ -900,7 +981,7 @@
             speedValue.innerText = data.speed;
           })
           .catch(function () {
-            motorStateText.innerText = "速度設定失敗";
+            setMotorStateText("速度設定失敗");
           });
       });
 
@@ -913,14 +994,16 @@
             return r.json();
           })
           .then(function (data) {
-            motorStateText.innerText =
-              "目前動作: " + (motorActionNames[data.action] || data.action);
+            setMotorStateText(
+              "目前動作: " + (motorActionNames[data.action] || data.action),
+            );
           })
           .catch(function () {
-            motorStateText.innerText = "控制指令傳送失敗";
+            setMotorStateText("控制指令傳送失敗");
           });
       }
 
+      // ---------- D-pad 按鍵 ----------
       document.querySelectorAll(".dpad-btn").forEach(function (btn) {
         var action = btn.dataset.action;
 
@@ -946,6 +1029,81 @@
             });
           },
         );
+      });
+
+      // ---------- 可拖曳虛擬搖桿 ----------
+      // 搖桿只有上下左右 4 個離散方向 (對應馬達前進/後退/左轉/右轉), 無法像真正的類比搖桿一樣走斜角,
+      // 因此以位移量較大的軸判斷主要方向, 中心死區內視為停止。
+      var joystickBase = document.getElementById("joystickBase");
+      var joystickKnob = document.getElementById("joystickKnob");
+      var joystickPointerId = null;
+      var joystickAction = "stop"; // 目前搖桿對應的動作, 方向不變時不重複送出請求
+
+      function setJoystickKnobOffset(dx, dy) {
+        joystickKnob.style.transform = "translate(" + dx + "px, " + dy + "px)";
+      }
+
+      // 依搖桿偏移量判斷方向: 取位移較大的軸 (上下 vs 左右), 死區內視為停止
+      function resolveJoystickAction(dx, dy, deadZone) {
+        if (Math.abs(dx) < deadZone && Math.abs(dy) < deadZone) return "stop";
+        if (Math.abs(dx) > Math.abs(dy)) {
+          return dx > 0 ? "right" : "left";
+        }
+        return dy > 0 ? "backward" : "forward";
+      }
+
+      function updateJoystick(clientX, clientY) {
+        var rect = joystickBase.getBoundingClientRect();
+        var dx = clientX - (rect.left + rect.width / 2);
+        var dy = clientY - (rect.top + rect.height / 2);
+
+        // 將搖桿限制在圓形底座範圍內
+        var maxRadius = rect.width / 2 - joystickKnob.offsetWidth / 2;
+        var dist = Math.sqrt(dx * dx + dy * dy);
+        if (dist > maxRadius) {
+          dx = (dx / dist) * maxRadius;
+          dy = (dy / dist) * maxRadius;
+        }
+        setJoystickKnobOffset(dx, dy);
+
+        var action = resolveJoystickAction(dx, dy, maxRadius * 0.35);
+        if (action !== joystickAction) {
+          joystickAction = action;
+          sendMotorAction(action);
+        }
+      }
+
+      function resetJoystick() {
+        joystickKnob.classList.remove("dragging");
+        setJoystickKnobOffset(0, 0);
+        if (joystickAction !== "stop") {
+          joystickAction = "stop";
+          sendMotorAction("stop");
+        }
+      }
+
+      joystickBase.addEventListener("pointerdown", function (e) {
+        joystickPointerId = e.pointerId;
+        joystickKnob.classList.add("dragging");
+        joystickBase.setPointerCapture(e.pointerId);
+        updateJoystick(e.clientX, e.clientY);
+      });
+
+      joystickBase.addEventListener("pointermove", function (e) {
+        if (joystickPointerId === null || e.pointerId !== joystickPointerId)
+          return;
+        updateJoystick(e.clientX, e.clientY);
+      });
+
+      // 使用 setPointerCapture 後放開手指/滑鼠不論在圓形範圍內外都會觸發 pointerup,
+      // 斷線或手指意外離開螢幕則由 pointercancel 處理, 兩者都要立即停止避免車輛失控持續移動
+      ["pointerup", "pointercancel"].forEach(function (evt) {
+        joystickBase.addEventListener(evt, function (e) {
+          if (joystickPointerId === null || e.pointerId !== joystickPointerId)
+            return;
+          joystickPointerId = null;
+          resetJoystick();
+        });
       });
 
       // ---------- 影像串流 (可調整每秒抓取張數的快照輪詢) ----------
