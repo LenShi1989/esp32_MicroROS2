@@ -406,6 +406,9 @@
             />
 
             <button type="button" id="connectBtn">連線</button>
+            <button type="button" class="secondary" id="clearWifiBtn">
+              清除 WiFi 設定重新連線
+            </button>
 
             <div class="result-msg" id="connectResult"></div>
           </div>
@@ -705,6 +708,41 @@
       });
 
       // ---------- 連線送出 ----------
+      // 裝置連上新 WiFi (STA) 時, 若與 AP 熱點頻道不同會強制切換 AP 頻道,
+      // 導致瀏覽器與 AP 熱點的連線短暫中斷 (就算裝置端其實連線成功, /connect 的回應也可能送不到瀏覽器)。
+      // 因此 /connect 只負責啟動連線並立即回應, 實際結果一律改用輪詢 /status 確認, fetch 失敗時也一併輪詢。
+      function pollConnectStatus(targetSsid, resultEl) {
+        var attempts = 0;
+        var maxAttempts = 20; // 每秒一次, 最多等待約 20 秒
+
+        var timer = setInterval(function () {
+          attempts++;
+          fetch("/status")
+            .then(function (r) {
+              return r.json();
+            })
+            .then(function (data) {
+              if (data.connected && data.ssid === targetSsid) {
+                clearInterval(timer);
+                resultEl.className = "result-msg ok";
+                resultEl.innerText = "連線成功! IP: " + data.ip;
+                loadStatus();
+              } else if (attempts >= maxAttempts) {
+                clearInterval(timer);
+                resultEl.className = "result-msg fail";
+                resultEl.innerText = "連線逾時, 請確認 SSID/密碼是否正確後重試";
+              }
+            })
+            .catch(function () {
+              if (attempts >= maxAttempts) {
+                clearInterval(timer);
+                resultEl.className = "result-msg fail";
+                resultEl.innerText = "無法取得連線狀態, 請重新整理頁面後確認";
+              }
+            });
+        }, 1000);
+      }
+
       document
         .getElementById("connectBtn")
         .addEventListener("click", function () {
@@ -730,7 +768,9 @@
               return r.json();
             })
             .then(function (data) {
-              if (data.success) {
+              if (data.connecting) {
+                pollConnectStatus(ssid, resultEl);
+              } else if (data.success) {
                 resultEl.className = "result-msg ok";
                 resultEl.innerText = "連線成功! IP: " + data.ip;
                 loadStatus();
@@ -740,8 +780,37 @@
               }
             })
             .catch(function () {
-              resultEl.className = "result-msg fail";
-              resultEl.innerText = "連線要求失敗, 請重試";
+              // 連線要求本身可能因 AP 頻道切換而送達失敗, 但裝置端仍可能連線成功, 改輪詢確認
+              pollConnectStatus(ssid, resultEl);
+            });
+        });
+
+      // ---------- 清除 WiFi 設定 ----------
+      document
+        .getElementById("clearWifiBtn")
+        .addEventListener("click", function () {
+          if (
+            !confirm(
+              "確定要清除已儲存的 WiFi 設定並重新開機嗎？清除後需重新連線設定用熱點進行設定。",
+            )
+          )
+            return;
+
+          var resultEl = document.getElementById("connectResult");
+          resultEl.className = "result-msg";
+          resultEl.innerText = "清除中, 裝置即將重新開機...";
+
+          fetch("/wifi/clear", { method: "POST" })
+            .then(function () {
+              resultEl.className = "result-msg ok";
+              resultEl.innerText =
+                "已清除 WiFi 設定, 裝置重新開機中, 請重新連線設定用熱點";
+            })
+            .catch(function () {
+              // 裝置重開機會中斷連線, 視為正常情況
+              resultEl.className = "result-msg ok";
+              resultEl.innerText =
+                "已清除 WiFi 設定, 裝置重新開機中, 請重新連線設定用熱點";
             });
         });
 

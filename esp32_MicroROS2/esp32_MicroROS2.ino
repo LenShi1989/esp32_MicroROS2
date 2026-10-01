@@ -6,7 +6,7 @@
     - 開機先進入 AP 模式 (WIFI_AP_STA), 提供設定用的 WiFi 熱點
     - 若先前已儲存過 WiFi 帳密 (存於 NVS), 會自動嘗試以 STA 模式連線
     - 使用 SPIFFS 存放網頁 (data/index.html), 提供含側邊欄的瀏覽器 GUI
-      - WiFi 連線設定: 掃描附近 SSID 或手動輸入, 輸入密碼後連線並儲存
+      - WiFi 連線設定: 掃描附近 SSID 或手動輸入, 輸入密碼後連線並儲存; 亦可清除已儲存的帳密並重新開機回到設定狀態
       - 設備控制: 開關切換控制 GPIO2 (ON/OFF); D-pad 按住方向按鈕控制 L298N 馬達前進/後退/左轉/右轉,
         放開按鈕自動停止; 速度調棒以 ENA/ENB 的 PWM duty 調整轉速 (0-100%)
       - OTA 燒錄: 可選擇更新「韌體 (Firmware)」或「檔案系統 (SPIFFS)」, 上傳 .bin 檔後
@@ -67,6 +67,15 @@ Preferences preferences;
 
 bool gpioState = false;
 
+// ==== 手動連線 (網頁觸發) 的非阻塞狀態 ====
+// STA 連上新 WiFi 時, 若與 AP 熱點頻道不同會強制切換 AP 頻道, 使瀏覽器與 AP 的 TCP 連線短暫中斷;
+// 若在此同一次 HTTP 請求內阻塞等待連線結果, 回應可能來不及送達前端 (出現 "連線要求失敗")。
+// 因此改為: 收到連線請求後立即回應「連線中」, 實際連線結果由 loop() 非阻塞處理, 前端再輪詢 /status 取得結果。
+bool wifiConnectPending = false;
+String wifiConnectSsid = "";
+String wifiConnectPassword = "";
+unsigned long wifiConnectStartMs = 0;
+
 // 目前馬達動作: stop / forward / backward / left / right
 String motorAction = "stop";
 
@@ -113,6 +122,39 @@ void loadAndConnectSavedWiFi() {
     connectToWiFi(savedSSID, savedPassword, WIFI_CONNECT_TIMEOUT_MS);
   } else {
     Serial.println("尚未儲存過 WiFi 帳密");
+  }
+}
+
+// ---------- 手動連線 (網頁觸發, 非阻塞) ----------
+
+// 啟動一次非阻塞連線, 實際結果由 loop() 中的 updateWifiConnectProgress() 輪詢判斷
+void startWifiConnect(const String &ssid, const String &password) {
+  Serial.printf("嘗試連線 WiFi: %s\n", ssid.c_str());
+  WiFi.begin(ssid.c_str(), password.c_str());
+
+  wifiConnectSsid = ssid;
+  wifiConnectPassword = password;
+  wifiConnectStartMs = millis();
+  wifiConnectPending = true;
+}
+
+// 於 loop() 中呼叫: 檢查是否已連上或逾時, 連線成功才寫入 NVS 儲存帳密
+void updateWifiConnectProgress() {
+  if (!wifiConnectPending) return;
+
+  if (WiFi.status() == WL_CONNECTED) {
+    Serial.print("WiFi 已連線, IP 位址: ");
+    Serial.println(WiFi.localIP());
+
+    preferences.begin("wifi", false);
+    preferences.putString("ssid", wifiConnectSsid);
+    preferences.putString("password", wifiConnectPassword);
+    preferences.end();
+
+    wifiConnectPending = false;
+  } else if (millis() - wifiConnectStartMs >= WIFI_CONNECT_TIMEOUT_MS) {
+    Serial.println("WiFi 連線失敗或逾時");
+    wifiConnectPending = false;
   }
 }
 
@@ -203,28 +245,33 @@ void handleScan() {
   server.send(200, "application/json", json);
 }
 
-// POST /connect : 依表單傳入的 ssid/password 嘗試連線, 成功則存入 NVS
+// POST /wifi/clear : 清除已儲存的 WiFi 帳密 (NVS) 並中斷目前連線, 回應後重新開機回到僅 AP 設定狀態
+void handleWifiClear() {
+  preferences.begin("wifi", false);
+  preferences.clear();
+  preferences.end();
+
+  server.send(200, "application/json", "{\"success\":true}");
+
+  delay(500);
+  WiFi.disconnect(true, true);
+  ESP.restart();
+}
+
+// POST /connect : 依表單傳入的 ssid/password 啟動連線, 立即回應「連線中」,
+// 實際連線結果交由 loop() 非阻塞處理, 前端需輪詢 /status 取得最終結果
+// (若在此阻塞等待連線完成才回應, STA 連線造成的 AP 頻道切換可能使回應來不及送達前端)
 void handleConnect() {
   String ssid = server.arg("ssid");
   String password = server.arg("password");
 
-  bool success = connectToWiFi(ssid, password, WIFI_CONNECT_TIMEOUT_MS);
-
-  String json = "{";
-  json += "\"success\":" + String(success ? "true" : "false") + ",";
-  if (success) {
-    preferences.begin("wifi", false);
-    preferences.putString("ssid", ssid);
-    preferences.putString("password", password);
-    preferences.end();
-
-    json += "\"ip\":\"" + WiFi.localIP().toString() + "\",";
-    json += "\"ssid\":\"" + ssid + "\"";
-  } else {
-    json += "\"message\":\"連線失敗, 請確認 SSID/密碼是否正確\"";
+  if (ssid.length() == 0) {
+    server.send(200, "application/json", "{\"success\":false,\"message\":\"請先選擇或輸入 SSID\"}");
+    return;
   }
-  json += "}";
-  server.send(200, "application/json", json);
+
+  startWifiConnect(ssid, password);
+  server.send(200, "application/json", "{\"success\":true,\"connecting\":true}");
 }
 
 // GET /gpio/status : 回傳 GPIO2 目前狀態 JSON
@@ -366,6 +413,10 @@ void setup() {
 
   // 同時開啟 AP (供設定用) 與 STA (連上既有 WiFi)
   WiFi.mode(WIFI_AP_STA);
+
+  // 關閉 modem-sleep 省電模式: 省電模式下收發 GTK 金鑰更新封包時機不穩,
+  // 常導致 ESP32 誤判 "CCMP replay detected" 而丟包斷線 (AP_STA 併存時更明顯)
+  WiFi.setSleep(false);
   WiFi.softAP(AP_SSID, AP_PASSWORD);
   Serial.print("AP 已啟動, SSID: ");
   Serial.print(AP_SSID);
@@ -381,6 +432,7 @@ void setup() {
   server.on("/status", HTTP_GET, handleStatus);
   server.on("/scan", HTTP_GET, handleScan);
   server.on("/connect", HTTP_POST, handleConnect);
+  server.on("/wifi/clear", HTTP_POST, handleWifiClear);
   server.on("/gpio/status", HTTP_GET, handleGpioStatus);
   server.on("/gpio/set", HTTP_POST, handleGpioSet);
   server.on("/motor/status", HTTP_GET, handleMotorStatus);
@@ -409,4 +461,5 @@ void setup() {
 void loop() {
   dnsServer.processNextRequest();
   server.handleClient();
+  updateWifiConnectProgress();
 }
