@@ -613,19 +613,24 @@
           })
           .then(function (data) {
             var box = document.getElementById("statusBox");
-            // 連線成功後裝置會自動關閉設定用 AP 熱點 (避免 AP/STA 併存造成不穩定), ap_active 為 false 時不顯示熱點資訊
-            var apInfo = data.ap_active
-              ? "<br>設定用熱點: " + data.ap_ssid + " (" + data.ap_ip + ")"
-              : "<br>設定用熱點已關閉 (STA 連線穩定時自動關閉, 若斷線會自動重新開啟)";
             if (data.connected) {
               box.innerHTML =
                 "已連線 WiFi: <b>" +
                 data.ssid +
                 "</b><br>IP: " +
                 data.ip +
-                apInfo;
+                "<br>設定用熱點: " +
+                data.ap_ssid +
+                " (" +
+                data.ap_ip +
+                ")";
             } else {
-              box.innerHTML = "尚未連線 WiFi" + apInfo;
+              box.innerHTML =
+                "尚未連線 WiFi<br>設定用熱點: " +
+                data.ap_ssid +
+                " (" +
+                data.ap_ip +
+                ")";
             }
           })
           .catch(function () {
@@ -705,14 +710,10 @@
       // ---------- 連線送出 ----------
       // 裝置連上新 WiFi (STA) 時, 若與 AP 熱點頻道不同會強制切換 AP 頻道,
       // 導致瀏覽器與 AP 熱點的連線短暫中斷 (就算裝置端其實連線成功, /connect 的回應也可能送不到瀏覽器)。
-      // 裝置端另外會在 STA 連線成功後自動關閉設定用 AP 熱點 (避免 AP/STA 併存造成不穩定),
-      // 若瀏覽器原本是連在這個 AP 熱點上, 此時會直接斷網, 之後輪詢 /status 一定會持續失敗。
-      // 因此 /connect 只負責啟動連線並立即回應, 實際結果一律改用輪詢 /status 確認, 連續輪詢失敗則視為連線成功。
+      // 因此 /connect 只負責啟動連線並立即回應, 實際結果一律改用輪詢 /status 確認, fetch 失敗時也一併輪詢。
       function pollConnectStatus(targetSsid, resultEl) {
         var attempts = 0;
-        var consecutiveFailures = 0;
         var maxAttempts = 20; // 每秒一次, 最多等待約 20 秒
-        var maxConsecutiveFailures = 4; // 連續幾次連不上視為 AP 熱點已關閉 (裝置端已連線成功)
 
         var timer = setInterval(function () {
           attempts++;
@@ -721,7 +722,6 @@
               return r.json();
             })
             .then(function (data) {
-              consecutiveFailures = 0;
               if (data.connected && data.ssid === targetSsid) {
                 clearInterval(timer);
                 resultEl.className = "result-msg ok";
@@ -734,13 +734,7 @@
               }
             })
             .catch(function () {
-              consecutiveFailures++;
-              if (consecutiveFailures >= maxConsecutiveFailures) {
-                clearInterval(timer);
-                resultEl.className = "result-msg ok";
-                resultEl.innerText =
-                  "裝置可能已連線成功並關閉設定熱點, 請將此裝置重新連回原本的網路, 再至路由器查到的新 IP 開啟控制頁面";
-              } else if (attempts >= maxAttempts) {
+              if (attempts >= maxAttempts) {
                 clearInterval(timer);
                 resultEl.className = "result-msg fail";
                 resultEl.innerText = "無法取得連線狀態, 請重新整理頁面後確認";

@@ -5,8 +5,6 @@
   功能:
     - 開機先進入 AP 模式 (WIFI_AP_STA), 提供設定用的 WiFi 熱點
     - 若先前已儲存過 WiFi 帳密 (存於 NVS), 會自動嘗試以 STA 模式連線
-    - STA 成功取得 IP 後自動關閉設定用 AP 熱點 (避免 AP/STA 長時間併存導致 "CCMP replay detected" 連線不穩定);
-      STA 若之後斷線則自動重新開啟 AP 熱點, 確保仍可連上裝置進行設定或救援
     - 使用 SPIFFS 存放網頁 (data/index.html), 提供含側邊欄的瀏覽器 GUI
       - WiFi 連線設定: 掃描附近 SSID 或手動輸入, 輸入密碼後連線並儲存; 亦可清除已儲存的帳密並重新開機回到設定狀態
       - 設備控制: 開關切換控制 GPIO2 (ON/OFF); D-pad 按住方向按鈕控制 L298N 馬達前進/後退/左轉/右轉,
@@ -160,27 +158,6 @@ void updateWifiConnectProgress() {
   }
 }
 
-// ---------- AP/STA 併存穩定性處理 ----------
-// ESP32 只有一組無線電, AP 與 STA 長時間併存運作時, 群組金鑰 (GTK) 的封包計數器容易互相干擾,
-// 導致不斷出現 "CCMP replay detected" 而使 AP 熱點和 STA 連線都變得不穩定。
-// 因此改為: STA 成功取得 IP 後自動關閉設定用 AP 熱點 (僅保留 STA, 單頻道運作最穩定);
-// 若 STA 之後斷線, 則自動重新開啟 AP 熱點, 確保使用者仍能連上裝置進行設定或救援。
-void onWifiStaGotIp(WiFiEvent_t event, WiFiEventInfo_t info) {
-  if (WiFi.getMode() == WIFI_AP_STA) {
-    Serial.println("STA 已取得 IP, 關閉設定用 AP 熱點以避免 AP/STA 併存造成的連線不穩定");
-    WiFi.softAPdisconnect(true);
-    WiFi.mode(WIFI_STA);
-  }
-}
-
-void onWifiStaDisconnected(WiFiEvent_t event, WiFiEventInfo_t info) {
-  if (WiFi.getMode() == WIFI_STA) {
-    Serial.println("STA 已斷線, 重新開啟設定用 AP 熱點");
-    WiFi.mode(WIFI_AP_STA);
-    WiFi.softAP(AP_SSID, AP_PASSWORD);
-  }
-}
-
 // ---------- 馬達控制 ----------
 
 // 設定單一馬達方向: dir 1=正轉(前), -1=反轉(後), 0=停止
@@ -241,17 +218,12 @@ void handleRoot() {
 // GET /status : 回傳目前連線狀態 JSON
 void handleStatus() {
   bool connected = WiFi.status() == WL_CONNECTED;
-  // STA 連線成功後會自動關閉設定用 AP 熱點 (見 onWifiStaGotIp), 此時 ap_active 為 false,
-  // 前端可依此判斷是否仍要顯示設定熱點資訊
-  bool apActive = (WiFi.getMode() == WIFI_AP_STA) || (WiFi.getMode() == WIFI_AP);
-
   String json = "{";
   json += "\"connected\":" + String(connected ? "true" : "false") + ",";
   json += "\"ssid\":\"" + (connected ? WiFi.SSID() : String("")) + "\",";
   json += "\"ip\":\"" + (connected ? WiFi.localIP().toString() : String("")) + "\",";
-  json += "\"ap_active\":" + String(apActive ? "true" : "false") + ",";
   json += "\"ap_ssid\":\"" + String(AP_SSID) + "\",";
-  json += "\"ap_ip\":\"" + (apActive ? WiFi.softAPIP().toString() : String("")) + "\"";
+  json += "\"ap_ip\":\"" + WiFi.softAPIP().toString() + "\"";
   json += "}";
   server.send(200, "application/json", json);
 }
@@ -438,10 +410,6 @@ void setup() {
   if (!SPIFFS.begin(true)) {
     Serial.println("SPIFFS 掛載失敗");
   }
-
-  // STA 連上/斷線時自動切換是否開啟 AP 熱點, 避免 AP/STA 長時間併存造成連線不穩定
-  WiFi.onEvent(onWifiStaGotIp, ARDUINO_EVENT_WIFI_STA_GOT_IP);
-  WiFi.onEvent(onWifiStaDisconnected, ARDUINO_EVENT_WIFI_STA_DISCONNECTED);
 
   // 同時開啟 AP (供設定用) 與 STA (連上既有 WiFi)
   WiFi.mode(WIFI_AP_STA);
