@@ -1,6 +1,9 @@
 /*
   esp32_OTA
   開發板: ESP32 NodeMCU-32S
+  韌體版本: v1.0.0
+    (與程式內的 FIRMWARE_VERSION 同步維護, 會顯示於網頁「系統狀態 > 系統資訊」,
+     方便 OTA 更新後確認裝置上跑的是哪一版)
 
   功能:
     - 開機先進入 AP 模式 (WIFI_AP_STA), 提供設定用的 WiFi 熱點
@@ -36,6 +39,10 @@
 #include <Update.h>
 #include <SPIFFS.h>
 #include <Preferences.h>
+
+// ==== 韌體版本 ====
+// 更新韌體內容時一併修改此處與檔頭註解的版本號
+const char *FIRMWARE_VERSION = "1.0.0";
 
 // ==== 設定用 AP 熱點基本資料 ====
 const char *AP_SSID = "ESP32-OTA-Setup";
@@ -291,6 +298,23 @@ void handleSystemInfo() {
     root.close();
   }
   json += "]}";
+
+  json += ",";
+  json += "\"system\":{";
+  json += "\"version\":\"" + jsonEscape(String(FIRMWARE_VERSION)) + "\",";
+  json += "\"build\":\"" + String(__DATE__) + " " + String(__TIME__) + "\",";
+  json += "\"chip\":\"" + String(ESP.getChipModel()) + "\",";
+  json += "\"cores\":" + String(ESP.getChipCores()) + ",";
+  json += "\"cpu_mhz\":" + String(ESP.getCpuFreqMHz()) + ",";
+  json += "\"flash_size\":" + String(ESP.getFlashChipSize()) + ",";
+  json += "\"free_heap\":" + String(ESP.getFreeHeap()) + ",";
+  json += "\"sketch_used\":" + String(ESP.getSketchSize()) + ",";
+  // 可用空間 = 目前韌體分割區中還能寫入的大小, 即 OTA 時新韌體的上限
+  json += "\"sketch_free\":" + String(ESP.getFreeSketchSpace()) + ",";
+  json += "\"sdk\":\"" + String(ESP.getSdkVersion()) + "\",";
+  json += "\"uptime\":" + String(millis() / 1000);
+  json += "}";
+
   json += "}";
 
   server.send(200, "application/json", json);

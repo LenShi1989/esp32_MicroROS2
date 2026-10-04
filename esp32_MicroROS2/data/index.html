@@ -502,6 +502,10 @@
         border: 1px solid var(--border-soft);
         width: 76px;
         height: 52px;
+        /* 方向文字一律橫向單行顯示: 需一併蓋掉 button 的預設左右內距 (22px),
+           否則文字可用寬度被吃掉後, 「前進」等兩字會被折成上下直排 */
+        white-space: nowrap;
+        padding: 0 6px;
         border-radius: 12px;
         font-size: 14px;
         font-weight: 600;
@@ -829,6 +833,11 @@
         <!-- ================= 系統狀態 ================= -->
         <div class="panel active" id="systemPanel">
           <div class="card">
+            <h2>系統資訊</h2>
+            <div class="status-box" id="sysInfoBox">讀取中...</div>
+          </div>
+
+          <div class="card" style="margin-top: 24px">
             <h2>WiFi 連線資訊</h2>
             <div class="status-box" id="sysWifiBox">讀取狀態中...</div>
             <button type="button" class="secondary" id="sysRefreshBtn">
@@ -1236,6 +1245,7 @@
       loadStatus();
 
       // ---------- 系統狀態 (WiFi 連線資訊 + SPIFFS 目錄及容量) ----------
+      var sysInfoBox = document.getElementById("sysInfoBox");
       var sysWifiBox = document.getElementById("sysWifiBox");
       var spiffsUsageBar = document.getElementById("spiffsUsageBar");
       var spiffsUsageText = document.getElementById("spiffsUsageText");
@@ -1256,6 +1266,49 @@
         else if (rssi >= -70) level = "中";
         else if (rssi >= -85) level = "弱";
         return rssi + " dBm (" + level + ")";
+      }
+
+      // 將開機後的秒數轉成「x 天 x 小時 x 分」
+      function formatUptime(seconds) {
+        if (typeof seconds !== "number" || isNaN(seconds)) return "-";
+        var day = Math.floor(seconds / 86400);
+        var hour = Math.floor((seconds % 86400) / 3600);
+        var minute = Math.floor((seconds % 3600) / 60);
+        var text = "";
+        if (day > 0) text += day + " 天 ";
+        if (day > 0 || hour > 0) text += hour + " 小時 ";
+        text += minute + " 分";
+        return text;
+      }
+
+      function renderSystemInfo(sys) {
+        var rows = "";
+        rows += statusRow("韌體版本", escapeHtml("v" + (sys.version || "-")));
+        rows += statusRow("編譯時間", escapeHtml(sys.build || "-"));
+        rows += statusRow(
+          "晶片型號",
+          escapeHtml(
+            (sys.chip || "-") +
+              (sys.cores ? " / " + sys.cores + " 核心" : "") +
+              (sys.cpu_mhz ? " / " + sys.cpu_mhz + " MHz" : ""),
+          ),
+        );
+        rows += statusRow("Flash 容量", escapeHtml(formatBytes(sys.flash_size)));
+        rows += statusRow(
+          "韌體佔用",
+          escapeHtml(
+            formatBytes(sys.sketch_used) +
+              " (可再寫入 " +
+              formatBytes(sys.sketch_free) +
+              ")",
+          ),
+        );
+        rows += statusRow("可用記憶體", escapeHtml(formatBytes(sys.free_heap)));
+        rows += statusRow("SDK 版本", escapeHtml(sys.sdk || "-"));
+        rows += statusRow("已運行時間", escapeHtml(formatUptime(sys.uptime)));
+
+        sysInfoBox.innerHTML =
+          '<table class="status-table">' + rows + "</table>";
       }
 
       function renderSystemWifi(wifi) {
@@ -1331,10 +1384,12 @@
             return r.json();
           })
           .then(function (data) {
+            renderSystemInfo(data.system || {});
             renderSystemWifi(data.wifi || {});
             renderSpiffs(data.spiffs || {});
           })
           .catch(function () {
+            sysInfoBox.innerText = "無法取得系統資訊";
             sysWifiBox.innerText = "無法取得系統狀態";
             spiffsUsageText.innerText = "無法取得 SPIFFS 資訊";
             spiffsUsageBar.style.width = "0%";
