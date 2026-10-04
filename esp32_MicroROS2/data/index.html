@@ -7,14 +7,26 @@
     <style>
       /* ==== 主題: 清新 Clean (id: clean) ====
          個性: 明亮、專業、日常工具 / 主色: 青綠 #0d7a63
-         卡片: 白卡、無框、柔和陰影、18px 圓角 / 側邊欄: 貼左、右側圓角 */
-      :root {
+         卡片: 白卡、無框、柔和陰影、18px 圓角 / 側邊欄: 貼左、右側圓角
+
+         明亮 / 暗黑兩套色票都以同一組 CSS 變數定義,
+         由 <html data-theme="light|dark"> 切換, 使用者的選擇存於 localStorage。
+         未指定 data-theme 時 (例如 JS 被停用) 一律套用明亮配色。 */
+      :root,
+      :root[data-theme="light"] {
+        color-scheme: light;
         --primary: #0d7a63;
         --primary-dark: #0a5f4e;
         --primary-soft: rgba(13, 122, 99, 0.08);
         --primary-soft-strong: rgba(13, 122, 99, 0.16);
+        --primary-line: rgba(13, 122, 99, 0.12);
+        --primary-line-strong: rgba(13, 122, 99, 0.25);
+        --primary-tick: rgba(13, 122, 99, 0.45);
         --bg: #f4f7f6;
         --card-bg: #ffffff;
+        --input-bg: #ffffff;
+        --surface-muted: #eef1f0;
+        --surface-raised: #ffffff;
         --text-primary: #1f2937;
         --text-dim: #6b7280;
         --text-faint: #9ca3af;
@@ -23,9 +35,56 @@
         --danger-soft: rgba(220, 38, 38, 0.08);
         --danger-soft-strong: rgba(220, 38, 38, 0.16);
         --success: #15803d;
+        --success-glow: rgba(21, 128, 61, 0.15);
+        --backdrop: rgba(15, 23, 42, 0.45);
         --shadow-card:
           0 10px 30px rgba(15, 23, 42, 0.07),
           0 2px 8px rgba(15, 23, 42, 0.04);
+        --shadow-btn: 0 4px 12px rgba(13, 122, 99, 0.25);
+        --shadow-btn-hover: 0 6px 16px rgba(13, 122, 99, 0.3);
+        --joystick-face: radial-gradient(circle at 50% 42%, #eef2f1, #e3e9e7 75%);
+        --joystick-shadow:
+          inset 0 2px 10px rgba(15, 23, 42, 0.08),
+          0 10px 24px rgba(15, 23, 42, 0.06);
+        --knob-light: #34b396;
+        --radius-card: 18px;
+      }
+
+      /* ==== 暗黑配色 ==== */
+      :root[data-theme="dark"] {
+        color-scheme: dark;
+        --primary: #19b891;
+        --primary-dark: #0f8e6f;
+        --primary-soft: rgba(25, 184, 145, 0.12);
+        --primary-soft-strong: rgba(25, 184, 145, 0.22);
+        --primary-line: rgba(25, 184, 145, 0.18);
+        --primary-line-strong: rgba(25, 184, 145, 0.35);
+        --primary-tick: rgba(25, 184, 145, 0.55);
+        --bg: #0e1416;
+        --card-bg: #172023;
+        --input-bg: #111a1c;
+        --surface-muted: #222e31;
+        --surface-raised: #1d282b;
+        --text-primary: #e6eceb;
+        --text-dim: #9ba7a5;
+        --text-faint: #6d7a78;
+        --border-soft: #2b3639;
+        --danger: #f87171;
+        --danger-soft: rgba(248, 113, 113, 0.12);
+        --danger-soft-strong: rgba(248, 113, 113, 0.22);
+        --success: #4ade80;
+        --success-glow: rgba(74, 222, 128, 0.18);
+        --backdrop: rgba(0, 0, 0, 0.6);
+        --shadow-card:
+          0 10px 30px rgba(0, 0, 0, 0.45),
+          0 2px 8px rgba(0, 0, 0, 0.3);
+        --shadow-btn: 0 4px 12px rgba(0, 0, 0, 0.45);
+        --shadow-btn-hover: 0 6px 16px rgba(0, 0, 0, 0.55);
+        --joystick-face: radial-gradient(circle at 50% 42%, #243134, #182124 75%);
+        --joystick-shadow:
+          inset 0 2px 10px rgba(0, 0, 0, 0.5),
+          0 10px 24px rgba(0, 0, 0, 0.35);
+        --knob-light: #3fd7ac;
         --radius-card: 18px;
       }
       * {
@@ -38,6 +97,9 @@
         background: var(--bg);
         display: flex;
         min-height: 100vh;
+        transition:
+          background 0.2s ease,
+          color 0.2s ease;
       }
 
       /* ---- 側邊欄: 貼左、右側圓角 ---- */
@@ -94,9 +156,13 @@
       .topbar {
         display: flex;
         align-items: center;
+        gap: 10px;
         padding: 10px 16px;
         background: transparent;
         flex-shrink: 0;
+      }
+      .topbar-spacer {
+        flex: 1;
       }
       .hamburger-btn {
         width: 40px;
@@ -125,6 +191,38 @@
         height: 2px;
         background: var(--primary);
         border-radius: 2px;
+      }
+
+      /* ---- 主題切換按鈕 (明亮 / 暗黑) ---- */
+      .theme-btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        height: 40px;
+        padding: 0 14px;
+        margin: 0;
+        border: none;
+        border-radius: 10px;
+        background: var(--card-bg);
+        color: var(--primary);
+        font-size: 13px;
+        font-weight: 600;
+        cursor: pointer;
+        box-shadow: var(--shadow-card);
+        transition: background 0.15s ease;
+      }
+      .theme-btn:hover {
+        background: var(--primary-soft);
+        box-shadow: var(--shadow-card);
+      }
+      .theme-icon {
+        font-size: 15px;
+        line-height: 1;
+      }
+
+      /* ---- 手機版側邊欄抽屜的半透明遮罩 (桌機版不顯示) ---- */
+      .backdrop {
+        display: none;
       }
 
       /* ---- 主要內容 ---- */
@@ -175,7 +273,7 @@
       }
       .status-table td {
         padding: 8px 4px;
-        border-bottom: 1px solid rgba(13, 122, 99, 0.12);
+        border-bottom: 1px solid var(--primary-line);
       }
       .status-table tr:last-child td {
         border-bottom: none;
@@ -201,7 +299,7 @@
       }
       .status-dot.ok {
         background: var(--success);
-        box-shadow: 0 0 0 3px rgba(21, 128, 61, 0.15);
+        box-shadow: 0 0 0 3px var(--success-glow);
       }
 
       label {
@@ -219,7 +317,7 @@
         border-radius: 10px;
         font-size: 14px;
         color: var(--text-primary);
-        background: #fff;
+        background: var(--input-bg);
         outline: none;
         transition: all 0.15s ease;
       }
@@ -281,15 +379,15 @@
         font-size: 14px;
         font-weight: 600;
         margin-top: 18px;
-        box-shadow: 0 4px 12px rgba(13, 122, 99, 0.25);
+        box-shadow: var(--shadow-btn);
         transition: all 0.15s ease;
       }
       button:hover {
         background: var(--primary-dark);
-        box-shadow: 0 6px 16px rgba(13, 122, 99, 0.3);
+        box-shadow: var(--shadow-btn-hover);
       }
       button.secondary {
-        background: #eef1f0;
+        background: var(--surface-muted);
         color: var(--text-primary);
         box-shadow: none;
       }
@@ -300,7 +398,7 @@
 
       .bar-wrap {
         width: 100%;
-        background: #eef1f0;
+        background: var(--surface-muted);
         border-radius: 10px;
         margin-top: 20px;
         overflow: hidden;
@@ -399,7 +497,7 @@
         gap: 8px;
       }
       .dpad-btn {
-        background: #fff;
+        background: var(--surface-raised);
         color: var(--primary);
         border: 1px solid var(--border-soft);
         width: 76px;
@@ -439,11 +537,9 @@
         width: 190px;
         height: 190px;
         border-radius: 50%;
-        background: radial-gradient(circle at 50% 42%, #eef2f1, #e3e9e7 75%);
+        background: var(--joystick-face);
         border: 1px solid var(--border-soft);
-        box-shadow:
-          inset 0 2px 10px rgba(15, 23, 42, 0.08),
-          0 10px 24px rgba(15, 23, 42, 0.06);
+        box-shadow: var(--joystick-shadow);
         touch-action: none;
       }
       .joystick-base::before {
@@ -451,18 +547,18 @@
         position: absolute;
         inset: 14px;
         border-radius: 50%;
-        border: 1px dashed rgba(13, 122, 99, 0.25);
+        border: 1px dashed var(--primary-line-strong);
       }
       .joystick-base::after {
         content: "";
         position: absolute;
         inset: 34px;
         border-radius: 50%;
-        border: 1px solid rgba(13, 122, 99, 0.12);
+        border: 1px solid var(--primary-line);
       }
       .joystick-tick {
         position: absolute;
-        color: rgba(13, 122, 99, 0.45);
+        color: var(--primary-tick);
         font-size: 11px;
         pointer-events: none;
       }
@@ -497,7 +593,7 @@
         border-radius: 50%;
         background: radial-gradient(
           circle at 35% 30%,
-          #34b396,
+          var(--knob-light),
           var(--primary) 55%,
           var(--primary-dark) 100%
         );
@@ -558,15 +654,155 @@
         display: block;
         transition: transform 0.2s ease;
       }
+
+      /* ---- SPIFFS 容量使用率與檔案目錄 ---- */
+      .usage-wrap {
+        width: 100%;
+        height: 10px;
+        background: var(--surface-muted);
+        border-radius: 999px;
+        overflow: hidden;
+        margin: 4px 0 10px;
+      }
+      .usage-bar {
+        height: 100%;
+        width: 0%;
+        background: var(--primary);
+        border-radius: 999px;
+        transition: width 0.3s ease;
+      }
+      .usage-text {
+        margin: 0 0 16px;
+        font-size: 13px;
+        color: var(--text-dim);
+      }
+      .file-table {
+        width: 100%;
+        /* 固定欄寬, 長檔名以換行處理, 不讓大小欄被擠掉 */
+        table-layout: fixed;
+        border-collapse: collapse;
+        font-size: 13px;
+      }
+      .file-table th {
+        padding: 6px 4px;
+        text-align: left;
+        font-size: 12px;
+        font-weight: 600;
+        color: var(--text-faint);
+        border-bottom: 1px solid var(--border-soft);
+      }
+      .file-table td {
+        padding: 8px 4px;
+        color: var(--text-primary);
+        border-bottom: 1px solid var(--primary-line);
+        overflow-wrap: anywhere;
+      }
+      .file-table tr:last-child td {
+        border-bottom: none;
+      }
+      .file-table th:last-child,
+      .file-table td:last-child {
+        width: 30%;
+        text-align: right;
+        color: var(--text-dim);
+      }
+
+      /* ---- 手機版面 ----
+         側邊欄改為覆蓋在內容上方的抽屜 (搭配半透明遮罩),
+         不再以 flex 佔寬推擠主內容, 卡片才不會被擠壓變形 */
+      @media (max-width: 768px) {
+        .sidebar {
+          position: fixed;
+          top: 0;
+          left: 0;
+          bottom: 0;
+          z-index: 30;
+          width: 230px;
+          overflow-y: auto;
+          transition: transform 0.25s ease;
+        }
+        .sidebar.collapsed {
+          width: 230px;
+          padding: 20px 12px;
+          transform: translateX(-102%);
+        }
+        .backdrop.show {
+          display: block;
+          position: fixed;
+          inset: 0;
+          z-index: 20;
+          background: var(--backdrop);
+        }
+        .topbar {
+          padding: 10px 14px;
+        }
+        .content {
+          padding: 16px 14px 32px;
+        }
+        .card {
+          max-width: none;
+          padding: 20px 16px;
+        }
+        .theme-btn {
+          padding: 0 12px;
+        }
+        .dpad-btn {
+          width: 68px;
+          height: 50px;
+        }
+      }
+      @media (max-width: 380px) {
+        .theme-label {
+          display: none;
+        }
+        .theme-btn {
+          width: 40px;
+          padding: 0;
+          justify-content: center;
+        }
+        .dpad-btn {
+          width: 58px;
+          height: 46px;
+          font-size: 13px;
+        }
+        .joystick-base {
+          width: 164px;
+          height: 164px;
+        }
+        .status-table td:first-child {
+          width: 42%;
+        }
+      }
     </style>
+    <script>
+      // 在頁面繪製前先套用使用者選擇的主題, 避免載入瞬間出現亮/暗閃爍
+      (function () {
+        var theme = null;
+        try {
+          theme = localStorage.getItem("uiTheme");
+        } catch (err) {}
+        if (theme !== "dark" && theme !== "light") {
+          theme =
+            window.matchMedia &&
+            window.matchMedia("(prefers-color-scheme: dark)").matches
+              ? "dark"
+              : "light";
+        }
+        document.documentElement.setAttribute("data-theme", theme);
+      })();
+    </script>
   </head>
   <body>
     <div class="sidebar" id="sidebar">
       <h1>AGV 車輛控制台</h1>
-      <div class="nav-item active" data-panel="wifiPanel">WiFi 連線設定</div>
+      <div class="nav-item active" data-panel="systemPanel">系統狀態</div>
+      <div class="nav-item" data-panel="wifiPanel">WiFi 連線設定</div>
       <div class="nav-item" data-panel="devicePanel">設備控制</div>
       <div class="nav-item" data-panel="otaPanel">OTA 韌體更新</div>
     </div>
+
+    <!-- 手機版抽屜式側邊欄的遮罩, 點擊可關閉側邊欄 -->
+    <div class="backdrop" id="sidebarBackdrop"></div>
 
     <div class="main">
       <div class="topbar">
@@ -578,11 +814,52 @@
         >
           <span></span><span></span><span></span>
         </button>
+        <div class="topbar-spacer"></div>
+        <button
+          type="button"
+          class="theme-btn"
+          id="themeToggle"
+          aria-label="切換主題"
+        >
+          <span class="theme-icon">🌙</span><span class="theme-label">暗黑</span>
+        </button>
       </div>
 
       <div class="content">
+        <!-- ================= 系統狀態 ================= -->
+        <div class="panel active" id="systemPanel">
+          <div class="card">
+            <h2>WiFi 連線資訊</h2>
+            <div class="status-box" id="sysWifiBox">讀取狀態中...</div>
+            <button type="button" class="secondary" id="sysRefreshBtn">
+              重新整理
+            </button>
+          </div>
+
+          <div class="card" style="margin-top: 24px">
+            <h2>SPIFFS 檔案系統</h2>
+            <div class="usage-wrap">
+              <div class="usage-bar" id="spiffsUsageBar"></div>
+            </div>
+            <p class="usage-text" id="spiffsUsageText">讀取中...</p>
+            <table class="file-table">
+              <thead>
+                <tr>
+                  <th>檔案</th>
+                  <th>大小</th>
+                </tr>
+              </thead>
+              <tbody id="spiffsFileBody">
+                <tr>
+                  <td colspan="2">讀取中...</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
         <!-- ================= WiFi 連線設定 ================= -->
-        <div class="panel active" id="wifiPanel">
+        <div class="panel" id="wifiPanel">
           <div class="card">
             <h2>WiFi 連線設定</h2>
 
@@ -827,12 +1104,74 @@
     </div>
 
     <script>
+      // ---------- 主題切換 (明亮 / 暗黑) ----------
+      // 實際配色由 <html data-theme> 決定 (色票定義於 :root / :root[data-theme="dark"]),
+      // 頁面開頭的 <head> script 已先套用儲存值, 這裡只負責切換與同步按鈕文字
+      var THEME_KEY = "uiTheme";
+      var themeToggle = document.getElementById("themeToggle");
+
+      function currentTheme() {
+        return document.documentElement.getAttribute("data-theme") === "dark"
+          ? "dark"
+          : "light";
+      }
+
+      function applyTheme(theme) {
+        document.documentElement.setAttribute("data-theme", theme);
+        // 按鈕顯示的是「按下去會切換成的主題」
+        themeToggle.innerHTML =
+          theme === "dark"
+            ? '<span class="theme-icon">☀</span><span class="theme-label">明亮</span>'
+            : '<span class="theme-icon">🌙</span><span class="theme-label">暗黑</span>';
+        themeToggle.setAttribute(
+          "aria-label",
+          theme === "dark" ? "切換為明亮主題" : "切換為暗黑主題",
+        );
+      }
+      applyTheme(currentTheme());
+
+      themeToggle.addEventListener("click", function () {
+        var next = currentTheme() === "dark" ? "light" : "dark";
+        applyTheme(next);
+        try {
+          localStorage.setItem(THEME_KEY, next);
+        } catch (err) {}
+      });
+
       // ---------- 漢堡選單: 展開/收合側邊欄 ----------
+      // 手機版 (<=768px) 的側邊欄以 CSS 改為覆蓋在內容上方的抽屜, 不再佔用版面寬度,
+      // 卡片因此不會被側邊欄推擠壓縮; 開啟時顯示遮罩, 點擊遮罩或選單項目即關閉
+      var sidebar = document.getElementById("sidebar");
+      var sidebarBackdrop = document.getElementById("sidebarBackdrop");
+
+      function isMobileLayout() {
+        return window.matchMedia("(max-width: 768px)").matches;
+      }
+
+      function syncSidebar() {
+        var opened = !sidebar.classList.contains("collapsed");
+        sidebarBackdrop.classList.toggle("show", opened && isMobileLayout());
+      }
+
+      function closeSidebarOnMobile() {
+        if (!isMobileLayout()) return;
+        sidebar.classList.add("collapsed");
+        syncSidebar();
+      }
+
+      // 手機版預設收合 (避免一進頁面就被抽屜蓋住), 桌機版維持展開
+      if (isMobileLayout()) sidebar.classList.add("collapsed");
+      syncSidebar();
+
       document
         .getElementById("sidebarToggle")
         .addEventListener("click", function () {
-          document.getElementById("sidebar").classList.toggle("collapsed");
+          sidebar.classList.toggle("collapsed");
+          syncSidebar();
         });
+
+      sidebarBackdrop.addEventListener("click", closeSidebarOnMobile);
+      window.addEventListener("resize", syncSidebar);
 
       // ---------- 側邊欄切換 ----------
       document.querySelectorAll(".nav-item").forEach(function (item) {
@@ -845,6 +1184,10 @@
           });
           item.classList.add("active");
           document.getElementById(item.dataset.panel).classList.add("active");
+
+          // 切回系統狀態頁時重新抓一次, 確保顯示的是最新狀態
+          if (item.dataset.panel === "systemPanel") loadSystemInfo();
+          closeSidebarOnMobile();
         });
       });
 
@@ -891,6 +1234,119 @@
           });
       }
       loadStatus();
+
+      // ---------- 系統狀態 (WiFi 連線資訊 + SPIFFS 目錄及容量) ----------
+      var sysWifiBox = document.getElementById("sysWifiBox");
+      var spiffsUsageBar = document.getElementById("spiffsUsageBar");
+      var spiffsUsageText = document.getElementById("spiffsUsageText");
+      var spiffsFileBody = document.getElementById("spiffsFileBody");
+
+      function formatBytes(bytes) {
+        if (typeof bytes !== "number" || isNaN(bytes)) return "-";
+        if (bytes < 1024) return bytes + " B";
+        if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + " KB";
+        return (bytes / 1024 / 1024).toFixed(2) + " MB";
+      }
+
+      // 以 RSSI 粗略標示訊號強弱, 方便判斷擺放位置
+      function formatRssi(rssi) {
+        if (typeof rssi !== "number" || rssi === 0) return "-";
+        var level = "極弱";
+        if (rssi >= -55) level = "強";
+        else if (rssi >= -70) level = "中";
+        else if (rssi >= -85) level = "弱";
+        return rssi + " dBm (" + level + ")";
+      }
+
+      function renderSystemWifi(wifi) {
+        var rows = "";
+        rows += statusRow(
+          "WiFi 狀態",
+          '<span class="status-dot ' +
+            (wifi.connected ? "ok" : "") +
+            '"></span>' +
+            (wifi.connected ? "已連線" : "尚未連線"),
+        );
+        if (wifi.connected) {
+          rows += statusRow("SSID", escapeHtml(wifi.ssid || "-"));
+          rows += statusRow("IP 位址", escapeHtml(wifi.ip || "-"));
+          rows += statusRow("閘道器", escapeHtml(wifi.gateway || "-"));
+          rows += statusRow("訊號強度", escapeHtml(formatRssi(wifi.rssi)));
+        }
+        rows += statusRow("MAC 位址", escapeHtml(wifi.mac || "-"));
+        rows += statusRow("設定用熱點", escapeHtml(wifi.ap_ssid || "-"));
+        rows += statusRow("熱點 IP", escapeHtml(wifi.ap_ip || "-"));
+        rows += statusRow(
+          "熱點連線裝置",
+          escapeHtml(
+            typeof wifi.ap_clients === "number" ? wifi.ap_clients + " 台" : "-",
+          ),
+        );
+
+        sysWifiBox.innerHTML =
+          '<table class="status-table">' + rows + "</table>";
+      }
+
+      function renderSpiffs(spiffs) {
+        var total = spiffs.total || 0;
+        var used = spiffs.used || 0;
+        var percent = total > 0 ? Math.round((used / total) * 100) : 0;
+
+        spiffsUsageBar.style.width = percent + "%";
+        spiffsUsageText.innerText =
+          "已使用 " +
+          formatBytes(used) +
+          " / " +
+          formatBytes(total) +
+          " (" +
+          percent +
+          "%), 剩餘 " +
+          formatBytes(Math.max(total - used, 0));
+
+        var files = spiffs.files || [];
+        if (!files.length) {
+          spiffsFileBody.innerHTML =
+            '<tr><td colspan="2">目錄內沒有檔案</td></tr>';
+          return;
+        }
+        files.sort(function (a, b) {
+          return a.name < b.name ? -1 : a.name > b.name ? 1 : 0;
+        });
+        spiffsFileBody.innerHTML = files
+          .map(function (f) {
+            return (
+              "<tr><td>" +
+              escapeHtml(f.name) +
+              "</td><td>" +
+              escapeHtml(formatBytes(f.size)) +
+              "</td></tr>"
+            );
+          })
+          .join("");
+      }
+
+      function loadSystemInfo() {
+        fetch("/system/info")
+          .then(function (r) {
+            return r.json();
+          })
+          .then(function (data) {
+            renderSystemWifi(data.wifi || {});
+            renderSpiffs(data.spiffs || {});
+          })
+          .catch(function () {
+            sysWifiBox.innerText = "無法取得系統狀態";
+            spiffsUsageText.innerText = "無法取得 SPIFFS 資訊";
+            spiffsUsageBar.style.width = "0%";
+            spiffsFileBody.innerHTML =
+              '<tr><td colspan="2">讀取失敗</td></tr>';
+          });
+      }
+      loadSystemInfo();
+
+      document
+        .getElementById("sysRefreshBtn")
+        .addEventListener("click", loadSystemInfo);
 
       // ---------- SSID 掃描 / 手動輸入切換 ----------
       var scanBlock = document.getElementById("scanBlock");
@@ -980,6 +1436,7 @@
                 resultEl.className = "result-msg ok";
                 resultEl.innerText = "連線成功! IP: " + data.ip;
                 loadStatus();
+                loadSystemInfo();
               } else if (attempts >= maxAttempts) {
                 clearInterval(timer);
                 resultEl.className = "result-msg fail";

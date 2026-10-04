@@ -6,6 +6,8 @@
     - 開機先進入 AP 模式 (WIFI_AP_STA), 提供設定用的 WiFi 熱點
     - 若先前已儲存過 WiFi 帳密 (存於 NVS), 會自動嘗試以 STA 模式連線
     - 使用 SPIFFS 存放網頁 (data/index.html), 提供含側邊欄的瀏覽器 GUI
+      - 系統狀態: 顯示 WiFi 連線資訊 (SSID/IP/訊號/MAC/熱點) 與 SPIFFS 檔案目錄及容量使用率
+      - 介面主題: 可切換明亮 / 暗黑兩種配色, 選擇記錄於瀏覽器 localStorage
       - WiFi 連線設定: 掃描附近 SSID 或手動輸入, 輸入密碼後連線並儲存; 亦可清除已儲存的帳密並重新開機回到設定狀態
       - 設備控制: 開關切換控制 GPIO2 (ON/OFF); D-pad 按住方向按鈕控制 L298N 馬達前進/後退/左轉/右轉,
         放開按鈕自動停止; 速度調棒以 ENA/ENB 的 PWM duty 調整轉速 (0-100%)
@@ -87,6 +89,27 @@ bool updateSuccess = false;
 String updateMessage = "";
 
 // ---------- 共用工具 ----------
+
+// 將字串轉為可安全放進 JSON 的內容 (SSID 或檔名可能含有雙引號、反斜線等字元)
+String jsonEscape(const String &text) {
+  String out;
+  out.reserve(text.length() + 8);
+  for (unsigned int i = 0; i < text.length(); i++) {
+    char c = text.charAt(i);
+    if (c == '"' || c == '\\') {
+      out += '\\';
+      out += c;
+    } else if (c == '\n') {
+      out += "\\n";
+    } else if (c == '\r') {
+      out += "\\r";
+    } else if ((unsigned char)c >= 0x20) {
+      out += c;
+    }
+    // 其餘控制字元直接略過
+  }
+  return out;
+}
 
 // 嘗試連線至指定 WiFi, 逾時則放棄, 回傳是否連線成功
 bool connectToWiFi(const String &ssid, const String &password, unsigned long timeoutMs) {
@@ -220,11 +243,56 @@ void handleStatus() {
   bool connected = WiFi.status() == WL_CONNECTED;
   String json = "{";
   json += "\"connected\":" + String(connected ? "true" : "false") + ",";
-  json += "\"ssid\":\"" + (connected ? WiFi.SSID() : String("")) + "\",";
+  json += "\"ssid\":\"" + (connected ? jsonEscape(WiFi.SSID()) : String("")) + "\",";
   json += "\"ip\":\"" + (connected ? WiFi.localIP().toString() : String("")) + "\",";
-  json += "\"ap_ssid\":\"" + String(AP_SSID) + "\",";
+  json += "\"ap_ssid\":\"" + jsonEscape(String(AP_SSID)) + "\",";
   json += "\"ap_ip\":\"" + WiFi.softAPIP().toString() + "\"";
   json += "}";
+  server.send(200, "application/json", json);
+}
+
+// GET /system/info : 回傳系統狀態 JSON
+// 內容包含 WiFi 連線資訊 (STA + AP) 與 SPIFFS 的容量使用量及檔案目錄
+void handleSystemInfo() {
+  bool connected = WiFi.status() == WL_CONNECTED;
+
+  String json = "{";
+  json += "\"wifi\":{";
+  json += "\"connected\":" + String(connected ? "true" : "false") + ",";
+  json += "\"ssid\":\"" + (connected ? jsonEscape(WiFi.SSID()) : String("")) + "\",";
+  json += "\"ip\":\"" + (connected ? WiFi.localIP().toString() : String("")) + "\",";
+  json += "\"gateway\":\"" + (connected ? WiFi.gatewayIP().toString() : String("")) + "\",";
+  json += "\"rssi\":" + String(connected ? WiFi.RSSI() : 0) + ",";
+  json += "\"mac\":\"" + WiFi.macAddress() + "\",";
+  json += "\"ap_ssid\":\"" + jsonEscape(String(AP_SSID)) + "\",";
+  json += "\"ap_ip\":\"" + WiFi.softAPIP().toString() + "\",";
+  json += "\"ap_clients\":" + String(WiFi.softAPgetStationNum());
+  json += "},";
+
+  json += "\"spiffs\":{";
+  json += "\"total\":" + String(SPIFFS.totalBytes()) + ",";
+  json += "\"used\":" + String(SPIFFS.usedBytes()) + ",";
+  json += "\"files\":[";
+  // SPIFFS 為扁平檔案系統, 由根目錄逐一列出所有檔案 (path() 會帶出含路徑的完整檔名)
+  File root = SPIFFS.open("/");
+  if (root) {
+    bool first = true;
+    File entry = root.openNextFile();
+    while (entry) {
+      if (!entry.isDirectory()) {
+        if (!first) json += ",";
+        first = false;
+        json += "{\"name\":\"" + jsonEscape(String(entry.path())) + "\",";
+        json += "\"size\":" + String(entry.size()) + "}";
+      }
+      entry.close();
+      entry = root.openNextFile();
+    }
+    root.close();
+  }
+  json += "]}";
+  json += "}";
+
   server.send(200, "application/json", json);
 }
 
@@ -235,7 +303,7 @@ void handleScan() {
   for (int i = 0; i < n; i++) {
     if (i > 0) json += ",";
     json += "{";
-    json += "\"ssid\":\"" + WiFi.SSID(i) + "\",";
+    json += "\"ssid\":\"" + jsonEscape(WiFi.SSID(i)) + "\",";
     json += "\"rssi\":" + String(WiFi.RSSI(i)) + ",";
     json += "\"secure\":" + String(WiFi.encryptionType(i) == WIFI_AUTH_OPEN ? "false" : "true");
     json += "}";
@@ -430,6 +498,7 @@ void setup() {
 
   server.on("/", HTTP_GET, handleRoot);
   server.on("/status", HTTP_GET, handleStatus);
+  server.on("/system/info", HTTP_GET, handleSystemInfo);
   server.on("/scan", HTTP_GET, handleScan);
   server.on("/connect", HTTP_POST, handleConnect);
   server.on("/wifi/clear", HTTP_POST, handleWifiClear);
