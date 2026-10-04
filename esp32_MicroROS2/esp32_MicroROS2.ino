@@ -1,12 +1,13 @@
 /*
   esp32_OTA
   開發板: ESP32 NodeMCU-32S
-  韌體版本: v1.1.0
+  韌體版本: v1.1.1
     (與程式內的 FIRMWARE_VERSION 同步維護, 會顯示於網頁「系統狀態 > 系統資訊」,
      方便 OTA 更新後確認裝置上跑的是哪一版)
 
   功能:
     - 開機先進入 AP 模式 (WIFI_AP_STA), 提供設定用的 WiFi 熱點
+      (SSID 為 ESP32-Car-xxxx, xxxx 是本機 AP MAC 後四碼, 多台裝置可由熱點名稱區分)
     - 若先前已儲存過 WiFi 帳密 (存於 NVS), 會自動嘗試以 STA 模式連線
     - 使用 SPIFFS 存放網頁 (data/index.html), 提供含側邊欄的瀏覽器 GUI
       - 系統狀態: 顯示韌體版本、裝置現在時間 (連網後由 NTP 校時, 時區 UTC+8)、
@@ -24,7 +25,7 @@
     1. Arduino IDE: 工具 > ESP32 Sketch Data Upload, 先把 data 資料夾內容燒錄進 SPIFFS
        (需先安裝 "ESP32 Sketch Data Upload" 外掛)
     2. 編譯並上傳本程式到 ESP32
-    3. 用手機/電腦連線 ESP32 熱點 (AP_SSID / AP_PASSWORD), 大多數作業系統會自動彈出瀏覽器
+    3. 用手機/電腦連線 ESP32 熱點 (ESP32-Car-xxxx / AP_PASSWORD), 大多數作業系統會自動彈出瀏覽器
        開啟設定頁面; 若未自動跳出, 手動開啟瀏覽器輸入 192.168.4.1
     4. 於「WiFi 連線設定」頁面掃描或手動輸入 SSID, 輸入密碼後按下連線
        連線成功後帳密會存入裝置, 下次開機自動連線
@@ -44,11 +45,16 @@
 
 // ==== 韌體版本 ====
 // 更新韌體內容時一併修改此處與檔頭註解的版本號
-const char *FIRMWARE_VERSION = "1.1.0";
+const char *FIRMWARE_VERSION = "1.1.1";
 
 // ==== 設定用 AP 熱點基本資料 ====
-const char *AP_SSID = "ESP32-OTA-Setup";
+// 熱點 SSID 為 前綴 + 本機 AP MAC 後四碼 (例: ESP32-Car-3A4C), 於 setup() 產生後存入 apSsid,
+// 讓多台裝置同時開機時可直接由熱點名稱分辨是哪一台
+const char *AP_SSID_PREFIX = "ESP32-Car-";
 const char *AP_PASSWORD = "12345678";
+
+// 實際使用的 AP SSID, 於 setup() 中由 buildApSsid() 產生
+String apSsid = "";
 
 // 嘗試以既有帳密連線 WiFi 的逾時時間 (毫秒)
 const unsigned long WIFI_CONNECT_TIMEOUT_MS = 15000;
@@ -128,6 +134,15 @@ String jsonEscape(const String &text) {
     // 其餘控制字元直接略過
   }
   return out;
+}
+
+// 以本機 AP 介面的 MAC 後四碼組出熱點 SSID (需在 WiFi.mode() 之後呼叫)
+String buildApSsid() {
+  String mac = WiFi.softAPmacAddress();  // 格式 AA:BB:CC:DD:EE:FF
+  mac.replace(":", "");
+  String suffix = mac.substring(mac.length() - 4);
+  suffix.toUpperCase();
+  return String(AP_SSID_PREFIX) + suffix;
 }
 
 // 連上 WiFi 後啟動 NTP 校時 (非阻塞, 由底層 SNTP 於背景完成同步)
@@ -277,7 +292,7 @@ void handleStatus() {
   json += "\"connected\":" + String(connected ? "true" : "false") + ",";
   json += "\"ssid\":\"" + (connected ? jsonEscape(WiFi.SSID()) : String("")) + "\",";
   json += "\"ip\":\"" + (connected ? WiFi.localIP().toString() : String("")) + "\",";
-  json += "\"ap_ssid\":\"" + jsonEscape(String(AP_SSID)) + "\",";
+  json += "\"ap_ssid\":\"" + jsonEscape(apSsid) + "\",";
   json += "\"ap_ip\":\"" + WiFi.softAPIP().toString() + "\"";
   json += "}";
   server.send(200, "application/json", json);
@@ -296,7 +311,7 @@ void handleSystemInfo() {
   json += "\"gateway\":\"" + (connected ? WiFi.gatewayIP().toString() : String("")) + "\",";
   json += "\"rssi\":" + String(connected ? WiFi.RSSI() : 0) + ",";
   json += "\"mac\":\"" + WiFi.macAddress() + "\",";
-  json += "\"ap_ssid\":\"" + jsonEscape(String(AP_SSID)) + "\",";
+  json += "\"ap_ssid\":\"" + jsonEscape(apSsid) + "\",";
   json += "\"ap_ip\":\"" + WiFi.softAPIP().toString() + "\",";
   json += "\"ap_clients\":" + String(WiFi.softAPgetStationNum());
   json += "},";
@@ -537,9 +552,11 @@ void setup() {
   // 關閉 modem-sleep 省電模式: 省電模式下收發 GTK 金鑰更新封包時機不穩,
   // 常導致 ESP32 誤判 "CCMP replay detected" 而丟包斷線 (AP_STA 併存時更明顯)
   WiFi.setSleep(false);
-  WiFi.softAP(AP_SSID, AP_PASSWORD);
+  // SSID 需在 WiFi.mode() 之後才能讀到 AP 介面的 MAC
+  apSsid = buildApSsid();
+  WiFi.softAP(apSsid.c_str(), AP_PASSWORD);
   Serial.print("AP 已啟動, SSID: ");
-  Serial.print(AP_SSID);
+  Serial.print(apSsid);
   Serial.print(", IP 位址: ");
   Serial.println(WiFi.softAPIP());
 
