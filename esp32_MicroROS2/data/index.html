@@ -47,6 +47,9 @@
           inset 0 2px 10px rgba(15, 23, 42, 0.08),
           0 10px 24px rgba(15, 23, 42, 0.06);
         --knob-light: #34b396;
+        --btn-text: #ffffff;
+        --card-border: transparent;
+        --glass-blur: none;
         --radius-card: 18px;
       }
 
@@ -85,6 +88,74 @@
           inset 0 2px 10px rgba(0, 0, 0, 0.5),
           0 10px 24px rgba(0, 0, 0, 0.35);
         --knob-light: #3fd7ac;
+        --btn-text: #ffffff;
+        --card-border: transparent;
+        --glass-blur: none;
+        --radius-card: 18px;
+      }
+
+      /* ==== 玻璃配色 ====
+         彩色漸層背景 + 半透明毛玻璃卡片 (backdrop-filter),
+         文字與線條改用白色系才能在深色漸層上看清楚 */
+      :root[data-theme="glass"] {
+        color-scheme: dark;
+        --primary: #5eead4;
+        --primary-dark: #2dd4bf;
+        --primary-soft: rgba(255, 255, 255, 0.14);
+        --primary-soft-strong: rgba(255, 255, 255, 0.26);
+        --primary-line: rgba(255, 255, 255, 0.18);
+        --primary-line-strong: rgba(255, 255, 255, 0.38);
+        --primary-tick: rgba(255, 255, 255, 0.6);
+        --bg:
+          radial-gradient(
+            1200px 620px at 8% 6%,
+            rgba(45, 212, 191, 0.55),
+            transparent 60%
+          ),
+          radial-gradient(
+            900px 520px at 92% 16%,
+            rgba(139, 92, 246, 0.5),
+            transparent 60%
+          ),
+          radial-gradient(
+            900px 640px at 50% 104%,
+            rgba(14, 165, 233, 0.45),
+            transparent 60%
+          ),
+          #0b1220;
+        --card-bg: rgba(255, 255, 255, 0.14);
+        --input-bg: rgba(255, 255, 255, 0.16);
+        --surface-muted: rgba(255, 255, 255, 0.12);
+        --surface-raised: rgba(255, 255, 255, 0.18);
+        --text-primary: #ffffff;
+        --text-dim: rgba(255, 255, 255, 0.78);
+        --text-faint: rgba(255, 255, 255, 0.58);
+        --border-soft: rgba(255, 255, 255, 0.28);
+        --danger: #fca5a5;
+        --danger-soft: rgba(252, 165, 165, 0.14);
+        --danger-soft-strong: rgba(252, 165, 165, 0.26);
+        --success: #6ee7b7;
+        --success-glow: rgba(110, 231, 183, 0.25);
+        --backdrop: rgba(5, 10, 20, 0.5);
+        --shadow-card:
+          0 16px 40px rgba(5, 10, 20, 0.35),
+          inset 0 1px 0 rgba(255, 255, 255, 0.25);
+        --shadow-btn: 0 4px 14px rgba(5, 10, 20, 0.35);
+        --shadow-btn-hover: 0 6px 18px rgba(5, 10, 20, 0.45);
+        --joystick-face:
+          radial-gradient(
+            circle at 50% 42%,
+            rgba(255, 255, 255, 0.3),
+            rgba(255, 255, 255, 0.1) 75%
+          );
+        --joystick-shadow:
+          inset 0 2px 12px rgba(255, 255, 255, 0.25),
+          0 10px 24px rgba(5, 10, 20, 0.3);
+        --knob-light: #a7f3d0;
+        /* 主色較亮, 按鈕文字改用深色才看得清楚 */
+        --btn-text: #06302a;
+        --card-border: rgba(255, 255, 255, 0.3);
+        --glass-blur: blur(16px);
         --radius-card: 18px;
       }
       * {
@@ -95,6 +166,7 @@
         font-family: "Microsoft JhengHei", Arial, sans-serif;
         color: var(--text-primary);
         background: var(--bg);
+        background-attachment: fixed;
         display: flex;
         min-height: 100vh;
         transition:
@@ -106,6 +178,9 @@
       .sidebar {
         width: 200px;
         background: var(--card-bg);
+        border-right: 1px solid var(--card-border);
+        backdrop-filter: var(--glass-blur);
+        -webkit-backdrop-filter: var(--glass-blur);
         color: var(--text-primary);
         flex-shrink: 0;
         padding: 20px 12px;
@@ -119,6 +194,7 @@
         width: 0;
         padding-left: 0;
         padding-right: 0;
+        border-right: none;
       }
       .sidebar h1 {
         font-size: 16px;
@@ -170,6 +246,9 @@
         border: none;
         border-radius: 10px;
         background: var(--card-bg);
+        border: 1px solid var(--card-border);
+        backdrop-filter: var(--glass-blur);
+        -webkit-backdrop-filter: var(--glass-blur);
         color: var(--primary);
         cursor: pointer;
         display: flex;
@@ -201,9 +280,11 @@
         height: 40px;
         padding: 0 14px;
         margin: 0;
-        border: none;
+        border: 1px solid var(--card-border);
         border-radius: 10px;
         background: var(--card-bg);
+        backdrop-filter: var(--glass-blur);
+        -webkit-backdrop-filter: var(--glass-blur);
         color: var(--primary);
         font-size: 13px;
         font-weight: 600;
@@ -239,6 +320,9 @@
 
       .card {
         background: var(--card-bg);
+        border: 1px solid var(--card-border);
+        backdrop-filter: var(--glass-blur);
+        -webkit-backdrop-filter: var(--glass-blur);
         border-radius: var(--radius-card);
         box-shadow: var(--shadow-card);
         padding: 30px 40px;
@@ -327,6 +411,10 @@
         border-color: var(--primary);
         box-shadow: 0 0 0 3px var(--primary-soft);
       }
+      input::placeholder {
+        color: var(--text-faint);
+        opacity: 1;
+      }
       input[type="file"] {
         width: 100%;
         margin: 10px 0;
@@ -371,7 +459,7 @@
       button,
       .btn {
         background: var(--primary);
-        color: #fff;
+        color: var(--btn-text);
         border: none;
         padding: 10px 22px;
         border-radius: 10px;
@@ -409,7 +497,7 @@
         width: 0%;
         background: var(--primary);
         text-align: center;
-        color: #fff;
+        color: var(--btn-text);
         font-size: 12px;
         font-weight: 600;
         line-height: 18px;
@@ -785,7 +873,7 @@
         try {
           theme = localStorage.getItem("uiTheme");
         } catch (err) {}
-        if (theme !== "dark" && theme !== "light") {
+        if (theme !== "dark" && theme !== "light" && theme !== "glass") {
           theme =
             window.matchMedia &&
             window.matchMedia("(prefers-color-scheme: dark)").matches
@@ -1113,34 +1201,49 @@
     </div>
 
     <script>
-      // ---------- 主題切換 (明亮 / 暗黑) ----------
-      // 實際配色由 <html data-theme> 決定 (色票定義於 :root / :root[data-theme="dark"]),
-      // 頁面開頭的 <head> script 已先套用儲存值, 這裡只負責切換與同步按鈕文字
+      // ---------- 主題切換 (明亮 / 暗黑 / 玻璃) ----------
+      // 實際配色由 <html data-theme> 決定 (色票定義於 :root[data-theme=...]),
+      // 頁面開頭的 <head> script 已先套用儲存值, 這裡只負責循環切換與同步按鈕文字
       var THEME_KEY = "uiTheme";
+      var THEMES = [
+        { id: "light", name: "明亮", icon: "☀" },
+        { id: "dark", name: "暗黑", icon: "🌙" },
+        { id: "glass", name: "玻璃", icon: "🧊" },
+      ];
       var themeToggle = document.getElementById("themeToggle");
 
-      function currentTheme() {
-        return document.documentElement.getAttribute("data-theme") === "dark"
-          ? "dark"
-          : "light";
+      function themeIndex(id) {
+        for (var i = 0; i < THEMES.length; i++) {
+          if (THEMES[i].id === id) return i;
+        }
+        return 0;
       }
 
-      function applyTheme(theme) {
-        document.documentElement.setAttribute("data-theme", theme);
-        // 按鈕顯示的是「按下去會切換成的主題」
+      function currentTheme() {
+        var id = document.documentElement.getAttribute("data-theme");
+        return THEMES[themeIndex(id)].id;
+      }
+
+      function applyTheme(id) {
+        var theme = THEMES[themeIndex(id)];
+        document.documentElement.setAttribute("data-theme", theme.id);
+        // 按鈕顯示目前主題, 點一下循環切換到下一個
         themeToggle.innerHTML =
-          theme === "dark"
-            ? '<span class="theme-icon">☀</span><span class="theme-label">明亮</span>'
-            : '<span class="theme-icon">🌙</span><span class="theme-label">暗黑</span>';
+          '<span class="theme-icon">' +
+          theme.icon +
+          '</span><span class="theme-label">' +
+          theme.name +
+          "</span>";
         themeToggle.setAttribute(
           "aria-label",
-          theme === "dark" ? "切換為明亮主題" : "切換為暗黑主題",
+          "切換主題 (目前: " + theme.name + ")",
         );
+        themeToggle.setAttribute("title", "切換主題 (目前: " + theme.name + ")");
       }
       applyTheme(currentTheme());
 
       themeToggle.addEventListener("click", function () {
-        var next = currentTheme() === "dark" ? "light" : "dark";
+        var next = THEMES[(themeIndex(currentTheme()) + 1) % THEMES.length].id;
         applyTheme(next);
         try {
           localStorage.setItem(THEME_KEY, next);
@@ -1285,23 +1388,20 @@
         var rows = "";
         rows += statusRow("韌體版本", escapeHtml("v" + (sys.version || "-")));
         rows += statusRow("編譯時間", escapeHtml(sys.build || "-"));
+        // 每列只放一項短資訊, 避免值太長在表格右欄被折成兩行
+        rows += statusRow("晶片型號", escapeHtml(sys.chip || "-"));
         rows += statusRow(
-          "晶片型號",
+          "核心 / 時脈",
           escapeHtml(
-            (sys.chip || "-") +
-              (sys.cores ? " / " + sys.cores + " 核心" : "") +
+            (sys.cores ? sys.cores + " 核心" : "-") +
               (sys.cpu_mhz ? " / " + sys.cpu_mhz + " MHz" : ""),
           ),
         );
         rows += statusRow("Flash 容量", escapeHtml(formatBytes(sys.flash_size)));
+        rows += statusRow("韌體佔用", escapeHtml(formatBytes(sys.sketch_used)));
         rows += statusRow(
-          "韌體佔用",
-          escapeHtml(
-            formatBytes(sys.sketch_used) +
-              " (可再寫入 " +
-              formatBytes(sys.sketch_free) +
-              ")",
-          ),
+          "韌體可再寫入",
+          escapeHtml(formatBytes(sys.sketch_free)),
         );
         rows += statusRow("可用記憶體", escapeHtml(formatBytes(sys.free_heap)));
         rows += statusRow("SDK 版本", escapeHtml(sys.sdk || "-"));
