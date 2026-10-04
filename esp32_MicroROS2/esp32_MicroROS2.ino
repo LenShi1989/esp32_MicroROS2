@@ -1,13 +1,13 @@
 /*
   esp32_OTA
   開發板: ESP32 NodeMCU-32S
-  韌體版本: v1.1.1
+  韌體版本: v1.1.2
     (與程式內的 FIRMWARE_VERSION 同步維護, 會顯示於網頁「系統狀態 > 系統資訊」,
      方便 OTA 更新後確認裝置上跑的是哪一版)
 
   功能:
     - 開機先進入 AP 模式 (WIFI_AP_STA), 提供設定用的 WiFi 熱點
-      (SSID 為 ESP32-Car-xxxx, xxxx 是本機 AP MAC 後四碼, 多台裝置可由熱點名稱區分)
+      (SSID 為 ESP32-Car-xxxx, xxxx 是本機 MAC 後四碼, 多台裝置可由熱點名稱區分)
     - 若先前已儲存過 WiFi 帳密 (存於 NVS), 會自動嘗試以 STA 模式連線
     - 使用 SPIFFS 存放網頁 (data/index.html), 提供含側邊欄的瀏覽器 GUI
       - 系統狀態: 顯示韌體版本、裝置現在時間 (連網後由 NTP 校時, 時區 UTC+8)、
@@ -41,14 +41,15 @@
 #include <Update.h>
 #include <SPIFFS.h>
 #include <Preferences.h>
+#include <esp_mac.h>
 #include <time.h>
 
 // ==== 韌體版本 ====
 // 更新韌體內容時一併修改此處與檔頭註解的版本號
-const char *FIRMWARE_VERSION = "1.1.1";
+const char *FIRMWARE_VERSION = "1.1.2";
 
 // ==== 設定用 AP 熱點基本資料 ====
-// 熱點 SSID 為 前綴 + 本機 AP MAC 後四碼 (例: ESP32-Car-3A4C), 於 setup() 產生後存入 apSsid,
+// 熱點 SSID 為 前綴 + 本機 MAC 後四碼 (例: ESP32-Car-3A4C), 於 setup() 產生後存入 apSsid,
 // 讓多台裝置同時開機時可直接由熱點名稱分辨是哪一台
 const char *AP_SSID_PREFIX = "ESP32-Car-";
 const char *AP_PASSWORD = "12345678";
@@ -136,12 +137,18 @@ String jsonEscape(const String &text) {
   return out;
 }
 
-// 以本機 AP 介面的 MAC 後四碼組出熱點 SSID (需在 WiFi.mode() 之後呼叫)
+// 以本機 MAC 後四碼組出熱點 SSID (例: ESP32-Car-3A4C)
+// 這裡用 esp_read_mac() 直接讀 eFuse 內燒錄的 MAC, 不經過網路介面:
+// WiFi.softAPmacAddress() / WiFi.macAddress() 底層是 esp_netif_get_mac(), 介面尚未 up 時
+// 會回傳 ESP_ERR_ESP_NETIF_IF_NOT_READY, Arduino 層再把結果印成 00:00:00:00:00:00 (SSID 變成 -0000);
+// 而 setup() 要先有 SSID 才能呼叫 WiFi.softAP() 把介面帶起來, 形成先後順序問題。
+// 取 ESP_MAC_WIFI_STA (晶片基底 MAC), 與網頁「系統資訊」顯示的 MAC 一致。
 String buildApSsid() {
-  String mac = WiFi.softAPmacAddress();  // 格式 AA:BB:CC:DD:EE:FF
-  mac.replace(":", "");
-  String suffix = mac.substring(mac.length() - 4);
-  suffix.toUpperCase();
+  uint8_t mac[6] = {0, 0, 0, 0, 0, 0};
+  esp_read_mac(mac, ESP_MAC_WIFI_STA);
+
+  char suffix[5];
+  snprintf(suffix, sizeof(suffix), "%02X%02X", mac[4], mac[5]);
   return String(AP_SSID_PREFIX) + suffix;
 }
 
@@ -552,7 +559,6 @@ void setup() {
   // 關閉 modem-sleep 省電模式: 省電模式下收發 GTK 金鑰更新封包時機不穩,
   // 常導致 ESP32 誤判 "CCMP replay detected" 而丟包斷線 (AP_STA 併存時更明顯)
   WiFi.setSleep(false);
-  // SSID 需在 WiFi.mode() 之後才能讀到 AP 介面的 MAC
   apSsid = buildApSsid();
   WiFi.softAP(apSsid.c_str(), AP_PASSWORD);
   Serial.print("AP 已啟動, SSID: ");

@@ -2,7 +2,7 @@
 
 ESP32 NodeMCU-32S 的 AGV 車輛控制台：開機自建 WiFi 熱點與導引式門戶，提供含側邊欄的網頁 GUI，可設定 WiFi、檢視系統狀態、控制板載 LED 與 L298N 馬達，並支援 OTA 遠端更新韌體與 SPIFFS 檔案系統。
 
-- 韌體版本：**v1.1.1**（與 `esp32_MicroROS2.ino` 中的 `FIRMWARE_VERSION` 同步維護，顯示於網頁「系統狀態 > 系統資訊」）
+- 韌體版本：**v1.1.2**（與 `esp32_MicroROS2.ino` 中的 `FIRMWARE_VERSION` 同步維護，顯示於網頁「系統狀態 > 系統資訊」）
 - 開發板：ESP32 NodeMCU-32S
 - 馬達驅動：L298N
 
@@ -31,14 +31,14 @@ esp32_MicroROS2/
   - AGV 車輛控制-2：可拖曳虛擬搖桿控制方向，放開自動回正並停止（速度沿用控制-1 的設定）
 - **OTA 韌體更新**：可選擇更新「韌體 (Firmware)」或「檔案系統 (SPIFFS)」，上傳 `.bin` 後自動重新開機
 - **介面主題**：明亮 ☀ / 暗黑 🌙 / 玻璃 🧊 三種配色循環切換，選擇記於 localStorage；手機版側邊欄改為抽屜式
-- **設定用熱點**：SSID 為 `ESP32-Car-` 加上該裝置 AP 介面 MAC 的後四碼（例如 `ESP32-Car-3A4C`），多台裝置可直接由名稱區分
+- **設定用熱點**：SSID 為 `ESP32-Car-` 加上該裝置 MAC 的後四碼（例如 `ESP32-Car-3A4C`），多台裝置可直接由名稱區分
 - **導引式門戶 (Captive Portal)**：連上 AP 熱點後作業系統通常會自動彈出瀏覽器開啟設定頁
 
 ## 使用方式
 
 1. 於 Arduino IDE 安裝 "ESP32 Sketch Data Upload" 外掛，開啟 `esp32_MicroROS2/esp32_MicroROS2.ino` 後執行 工具 > ESP32 Sketch Data Upload，將 `esp32_MicroROS2/data/` 資料夾內容燒錄進 SPIFFS
 2. 編譯並上傳 `esp32_MicroROS2.ino` 到 ESP32 開發板
-3. 用手機或電腦連線 ESP32 的設定用熱點（SSID：`ESP32-Car-xxxx`，`xxxx` 為該裝置 AP 介面 MAC 的後四碼；密碼：`12345678`，前綴與密碼可於程式碼的 `AP_SSID_PREFIX` / `AP_PASSWORD` 修改）
+3. 用手機或電腦連線 ESP32 的設定用熱點（SSID：`ESP32-Car-xxxx`，`xxxx` 為該裝置 MAC 的後四碼；密碼：`12345678`，前綴與密碼可於程式碼的 `AP_SSID_PREFIX` / `AP_PASSWORD` 修改）
    - 每台裝置的 SSID 後四碼皆不同，多台同時開機時可直接由熱點名稱分辨；實際 SSID 也會顯示在序列埠與網頁「系統狀態 > WiFi 連線資訊 > 設定用熱點」
    - 裝置內建導引式門戶 (Captive Portal)，連上熱點後作業系統通常會自動偵測並跳出瀏覽器開啟設定頁面
    - 若未自動跳出，手動開啟瀏覽器輸入 `192.168.4.1`
