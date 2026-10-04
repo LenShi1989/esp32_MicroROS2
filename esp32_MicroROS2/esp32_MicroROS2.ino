@@ -1,7 +1,7 @@
 /*
   esp32_OTA
   開發板: ESP32 NodeMCU-32S
-  韌體版本: v1.0.0
+  韌體版本: v1.1.0
     (與程式內的 FIRMWARE_VERSION 同步維護, 會顯示於網頁「系統狀態 > 系統資訊」,
      方便 OTA 更新後確認裝置上跑的是哪一版)
 
@@ -9,7 +9,8 @@
     - 開機先進入 AP 模式 (WIFI_AP_STA), 提供設定用的 WiFi 熱點
     - 若先前已儲存過 WiFi 帳密 (存於 NVS), 會自動嘗試以 STA 模式連線
     - 使用 SPIFFS 存放網頁 (data/index.html), 提供含側邊欄的瀏覽器 GUI
-      - 系統狀態: 顯示 WiFi 連線資訊 (SSID/IP/訊號/MAC/熱點) 與 SPIFFS 檔案目錄及容量使用率
+      - 系統狀態: 顯示韌體版本、裝置現在時間 (連網後由 NTP 校時, 時區 UTC+8)、
+        WiFi 連線資訊 (SSID/IP/訊號/MAC/熱點) 與 SPIFFS 檔案目錄及容量使用率
       - 介面主題: 可切換明亮 / 暗黑兩種配色, 選擇記錄於瀏覽器 localStorage
       - WiFi 連線設定: 掃描附近 SSID 或手動輸入, 輸入密碼後連線並儲存; 亦可清除已儲存的帳密並重新開機回到設定狀態
       - 設備控制: 開關切換控制 GPIO2 (ON/OFF); D-pad 按住方向按鈕控制 L298N 馬達前進/後退/左轉/右轉,
@@ -39,10 +40,11 @@
 #include <Update.h>
 #include <SPIFFS.h>
 #include <Preferences.h>
+#include <time.h>
 
 // ==== 韌體版本 ====
 // 更新韌體內容時一併修改此處與檔頭註解的版本號
-const char *FIRMWARE_VERSION = "1.0.0";
+const char *FIRMWARE_VERSION = "1.1.0";
 
 // ==== 設定用 AP 熱點基本資料 ====
 const char *AP_SSID = "ESP32-OTA-Setup";
@@ -50,6 +52,16 @@ const char *AP_PASSWORD = "12345678";
 
 // 嘗試以既有帳密連線 WiFi 的逾時時間 (毫秒)
 const unsigned long WIFI_CONNECT_TIMEOUT_MS = 15000;
+
+// ==== 時間校正 (NTP) ====
+// ESP32 沒有電池供電的 RTC, 開機時間從 1970 年起算,
+// 連上網際網路後向 NTP 伺服器校時, 時區固定為台灣 (CST-8 即 UTC+8, 無日光節約)
+const char *NTP_SERVER_1 = "pool.ntp.org";
+const char *NTP_SERVER_2 = "time.google.com";
+const char *TIMEZONE_INFO = "CST-8";
+
+// 判斷是否已校時的門檻 (2023-11-14), 小於此值代表時間仍是開機預設值
+const time_t TIME_SYNCED_THRESHOLD = 1700000000;
 
 // 受控制的 GPIO 腳位
 const int GPIO_CONTROL_PIN = 2;
@@ -118,6 +130,17 @@ String jsonEscape(const String &text) {
   return out;
 }
 
+// 連上 WiFi 後啟動 NTP 校時 (非阻塞, 由底層 SNTP 於背景完成同步)
+void syncTimeWithNtp() {
+  configTzTime(TIMEZONE_INFO, NTP_SERVER_1, NTP_SERVER_2);
+  Serial.println("已啟動 NTP 校時 (時區 UTC+8)");
+}
+
+// 系統時間是否已由 NTP 校正過
+bool isTimeSynced() {
+  return time(nullptr) > TIME_SYNCED_THRESHOLD;
+}
+
 // 嘗試連線至指定 WiFi, 逾時則放棄, 回傳是否連線成功
 bool connectToWiFi(const String &ssid, const String &password, unsigned long timeoutMs) {
   if (ssid.length() == 0) return false;
@@ -135,6 +158,7 @@ bool connectToWiFi(const String &ssid, const String &password, unsigned long tim
   if (WiFi.status() == WL_CONNECTED) {
     Serial.print("WiFi 已連線, IP 位址: ");
     Serial.println(WiFi.localIP());
+    syncTimeWithNtp();
     return true;
   }
 
@@ -175,6 +199,7 @@ void updateWifiConnectProgress() {
   if (WiFi.status() == WL_CONNECTED) {
     Serial.print("WiFi 已連線, IP 位址: ");
     Serial.println(WiFi.localIP());
+    syncTimeWithNtp();
 
     preferences.begin("wifi", false);
     preferences.putString("ssid", wifiConnectSsid);
@@ -303,6 +328,9 @@ void handleSystemInfo() {
   json += "\"system\":{";
   json += "\"version\":\"" + jsonEscape(String(FIRMWARE_VERSION)) + "\",";
   json += "\"build\":\"" + String(__DATE__) + " " + String(__TIME__) + "\",";
+  // 裝置現在時間: 以 Unix epoch 秒數回傳, 由網頁依 UTC+8 格式化並持續走動
+  json += "\"time_synced\":" + String(isTimeSynced() ? "true" : "false") + ",";
+  json += "\"epoch\":" + String((uint32_t)time(nullptr)) + ",";
   json += "\"chip\":\"" + String(ESP.getChipModel()) + "\",";
   json += "\"cores\":" + String(ESP.getChipCores()) + ",";
   json += "\"cpu_mhz\":" + String(ESP.getCpuFreqMHz()) + ",";

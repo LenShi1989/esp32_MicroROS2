@@ -1371,6 +1371,47 @@
         return rssi + " dBm (" + level + ")";
       }
 
+      // ---------- 裝置現在時間 ----------
+      // 裝置時區固定為台灣 UTC+8, 以 getUTC* 搭配偏移格式化, 不受瀏覽器所在時區影響
+      var DEVICE_TZ_OFFSET_HOURS = 8;
+      // 取得系統資訊時記下「裝置時間」與「當下瀏覽器時間」, 之後靠瀏覽器計時器推算, 不必一直向裝置查詢
+      var deviceClock = null;
+
+      function pad2(n) {
+        return n < 10 ? "0" + n : "" + n;
+      }
+
+      function formatDeviceTime(epochMs) {
+        var d = new Date(epochMs + DEVICE_TZ_OFFSET_HOURS * 3600000);
+        return (
+          d.getUTCFullYear() +
+          "-" +
+          pad2(d.getUTCMonth() + 1) +
+          "-" +
+          pad2(d.getUTCDate()) +
+          " " +
+          pad2(d.getUTCHours()) +
+          ":" +
+          pad2(d.getUTCMinutes()) +
+          ":" +
+          pad2(d.getUTCSeconds())
+        );
+      }
+
+      // 未連上網際網路時裝置無法校時, 此時不顯示錯誤的 1970 年時間
+      function currentDeviceTimeText() {
+        if (!deviceClock) return "未校時 (需連線網際網路)";
+        return formatDeviceTime(
+          deviceClock.epochMs + (Date.now() - deviceClock.localMs),
+        );
+      }
+
+      // 每秒就地更新「現在時間」欄位, 讓時間持續走動
+      setInterval(function () {
+        var cell = document.getElementById("sysNowValue");
+        if (cell) cell.innerText = currentDeviceTimeText();
+      }, 1000);
+
       // 將開機後的秒數轉成「x 天 x 小時 x 分」
       function formatUptime(seconds) {
         if (typeof seconds !== "number" || isNaN(seconds)) return "-";
@@ -1385,9 +1426,19 @@
       }
 
       function renderSystemInfo(sys) {
+        deviceClock = sys.time_synced
+          ? { epochMs: (sys.epoch || 0) * 1000, localMs: Date.now() }
+          : null;
+
         var rows = "";
         rows += statusRow("韌體版本", escapeHtml("v" + (sys.version || "-")));
         rows += statusRow("編譯時間", escapeHtml(sys.build || "-"));
+        rows += statusRow(
+          "現在時間",
+          '<span id="sysNowValue">' +
+            escapeHtml(currentDeviceTimeText()) +
+            "</span>",
+        );
         // 每列只放一項短資訊, 避免值太長在表格右欄被折成兩行
         rows += statusRow("晶片型號", escapeHtml(sys.chip || "-"));
         rows += statusRow(
